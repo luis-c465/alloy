@@ -189,9 +189,19 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       rawContentType,
     } = get();
 
+    const urlWithoutQueryParams = (() => {
+      try {
+        const parsedUrl = new URL(url);
+        parsedUrl.search = "";
+        return parsedUrl.toString();
+      } catch {
+        return url;
+      }
+    })();
+
     const payload: HttpRequestData = {
       method,
-      url,
+      url: urlWithoutQueryParams,
       headers: headers.filter((header) => header.enabled).map(toApiKeyValue),
       query_params: queryParams.filter((param) => param.enabled).map(toApiKeyValue),
       body: toRequestBody(bodyType, bodyContent, bodyFormData, rawContentType),
