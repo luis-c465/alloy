@@ -1,0 +1,38 @@
+use serde::{Deserialize, Serialize};
+
+#[taurpc::ipc_type]
+pub struct KeyValue {
+    pub key: String,
+    pub value: String,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
+pub enum RequestBody {
+    None,
+    Json(String),
+    FormUrlEncoded(Vec<KeyValue>),
+    Raw {
+        content: String,
+        content_type: String,
+    },
+}
+
+#[taurpc::ipc_type]
+pub struct HttpRequestData {
+    pub method: String,
+    pub url: String,
+    pub headers: Vec<KeyValue>,
+    pub query_params: Vec<KeyValue>,
+    pub body: RequestBody,
+}
+
+#[taurpc::ipc_type]
+pub struct HttpResponseData {
+    pub status: u16,
+    pub status_text: String,
+    pub headers: Vec<KeyValue>,
+    pub body: String,
+    pub size_bytes: u64,
+    pub time_ms: u64,
+}
