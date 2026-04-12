@@ -500,6 +500,8 @@ Response Viewer UI
 - Create: `src/components/request/HeadersEditor.tsx`
 - Create: `src/components/request/BodyEditor.tsx`
 - Create: `src/components/request/KeyValueEditor.tsx` (shared component for params/headers/form-data)
+- > **Updated by Step 6 executor:** Added `src/stores/request-store.ts` to scope to expose `setRawContentType()` needed for the Raw content-type selector in `BodyEditor`.
+- Modify: `src/stores/request-store.ts` (add `setRawContentType` action)
 
 **Sub-tasks:**
 
@@ -534,7 +536,8 @@ Response Viewer UI
      - `"json"` — render a CodeMirror editor with JSON language support. Import `@uiw/react-codemirror` with `@codemirror/lang-json`. Bind value to `bodyContent`, onChange to `setBodyContent()`. Use a dark/light theme that matches the app's theme.
      - `"form-urlencoded"` — render `KeyValueEditor` bound to `bodyFormData` / `setBodyFormData()`
      - `"raw"` — render a CodeMirror editor with no specific language mode (or auto-detect from `rawContentType`). Add a small dropdown next to the "Raw" radio to select content type: "Text", "XML", "HTML", "JavaScript". Bind value to `bodyContent`, onChange to `setBodyContent()`.
-   - CodeMirror configuration: line numbers on, basic setup extensions, height should fill available space (use `height: "100%"` and `flex: 1` on the parent container), set `minHeight: "100px"`.
+    - CodeMirror configuration: line numbers on, basic setup extensions, height should fill available space (use `height: "100%"` and `flex: 1` on the parent container), set `minHeight: "100px"`.
+    - > **Updated by Step 6 executor:** If `rawContentType` is already stored in Zustand state but has no setter, add `setRawContentType(contentType: string)` to the store so the Raw content-type dropdown can update request payload construction.
 
 5. **Update `src/components/request/RequestPanel.tsx`.** Add the shadcn `Tabs` component below the URL bar:
    - Tab triggers: "Params", "Headers", "Body"

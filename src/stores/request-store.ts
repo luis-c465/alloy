@@ -36,6 +36,7 @@ interface RequestStore {
   setBodyType: (type: BodyType) => void;
   setBodyContent: (content: string) => void;
   setBodyFormData: (data: KeyValue[]) => void;
+  setRawContentType: (contentType: string) => void;
   setResponse: (response: HttpResponseData | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -118,6 +119,7 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
   setBodyType: (bodyType) => set({ bodyType }),
   setBodyContent: (bodyContent) => set({ bodyContent }),
   setBodyFormData: (bodyFormData) => set({ bodyFormData }),
+  setRawContentType: (rawContentType) => set({ rawContentType }),
   setResponse: (response) => set({ response }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
