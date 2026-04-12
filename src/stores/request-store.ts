@@ -1,19 +1,14 @@
 import { create } from "zustand";
+import type {
+  HttpRequestData,
+  HttpResponseData,
+  KeyValue as ApiKeyValue,
+  RequestBody,
+} from "~/bindings";
+import { sendRequest as sendRequestApi } from "~/lib/api";
 
-export interface KeyValue {
-  key: string;
-  value: string;
-  enabled: boolean;
+export interface KeyValue extends ApiKeyValue {
   id: string;
-}
-
-export interface HttpResponseData {
-  status: number;
-  status_text: string;
-  headers: KeyValue[];
-  body: string;
-  size_bytes: number;
-  time_ms: number;
 }
 
 type BodyType = "none" | "json" | "form-urlencoded" | "raw";
@@ -48,6 +43,7 @@ interface RequestStore {
   setActiveResponseTab: (tab: ResponseTab) => void;
   syncQueryParamsToUrl: () => void;
   syncUrlToQueryParams: () => void;
+  sendRequest: () => Promise<void>;
 }
 
 const createEmptyKeyValue = (): KeyValue => ({
@@ -56,6 +52,50 @@ const createEmptyKeyValue = (): KeyValue => ({
   enabled: true,
   id: crypto.randomUUID(),
 });
+
+const toApiKeyValue = ({ key, value, enabled }: KeyValue): ApiKeyValue => ({
+  key,
+  value,
+  enabled,
+});
+
+const toRequestBody = (
+  bodyType: BodyType,
+  bodyContent: string,
+  bodyFormData: KeyValue[],
+  rawContentType: string,
+): RequestBody => {
+  switch (bodyType) {
+    case "json":
+      return { Json: bodyContent };
+    case "form-urlencoded":
+      return {
+        FormUrlEncoded: bodyFormData.filter((item) => item.enabled).map(toApiKeyValue),
+      };
+    case "raw":
+      return {
+        Raw: {
+          content: bodyContent,
+          content_type: rawContentType,
+        },
+      };
+    case "none":
+    default:
+      return "None";
+  }
+};
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Failed to send request";
+};
 
 export const useRequestStore = create<RequestStore>()((set, get) => ({
   method: "GET",
@@ -131,6 +171,37 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       set({ queryParams: params });
     } catch {
       // Ignore malformed URLs while the user is typing.
+    }
+  },
+  sendRequest: async () => {
+    const {
+      method,
+      url,
+      headers,
+      queryParams,
+      bodyType,
+      bodyContent,
+      bodyFormData,
+      rawContentType,
+    } = get();
+
+    const payload: HttpRequestData = {
+      method,
+      url,
+      headers: headers.filter((header) => header.enabled).map(toApiKeyValue),
+      query_params: queryParams.filter((param) => param.enabled).map(toApiKeyValue),
+      body: toRequestBody(bodyType, bodyContent, bodyFormData, rawContentType),
+    };
+
+    set({ isLoading: true, error: null });
+
+    try {
+      const response = await sendRequestApi(payload);
+      set({ response });
+    } catch (error) {
+      set({ error: getErrorMessage(error) });
+    } finally {
+      set({ isLoading: false });
     }
   },
 }));

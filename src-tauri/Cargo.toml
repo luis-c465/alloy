@@ -22,6 +22,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 taurpc = "0.7"
 specta = { version = "=2.0.0-rc.22", features = ["derive"] }
+specta-typescript = "0"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "multipart", "cookies", "rustls-tls"] }
 thiserror = "2"

@@ -168,6 +168,8 @@ Response Viewer UI
 10. **Update `src-tauri/src/main.rs`.** This file should remain as-is (it just calls `alloy_lib::run()`). Verify it compiles.
 
 **Edge Cases & Gotchas:**
+- > **Updated by Step 3 executor:** TauRPC `Router::merge(...)` initializes Tokio broadcast channels. Router creation must happen while a Tokio runtime is active (e.g., `#[tokio::main] async fn main()` calling an async `run()`), otherwise startup panics with `there is no reactor running`.
+- > **Updated by Step 3 executor:** Specta export fails on `u64` fields by default (`BigIntExportBehavior::Fail`). Configure router export via `.export_config(Typescript::default().bigint(BigIntExportBehavior::Number|String))` to allow generating `bindings.ts`.
 - TauRPC requires the exact specta version `=2.0.0-rc.22`. Using a caret range (`^2.0.0-rc.22`) will break.
 - The `export_to` path in `#[taurpc::procedures]` is relative to `src-tauri/`, so `"../src/bindings.ts"` writes to the frontend `src/` directory.
 - The `bindings.ts` file is auto-generated and should be added to `.gitignore` (or at least documented as generated).
@@ -325,6 +327,7 @@ Response Viewer UI
 5. **Decide on `.gitignore` for `bindings.ts`.** The recommendation is to **track** `bindings.ts` in git — it's small, and tracking it means frontend-only developers don't need the Rust toolchain to get TypeScript types. Add a header comment in the api.ts wrapper noting it's generated.
 
 **Edge Cases & Gotchas:**
+- > **Updated by Step 3 executor:** With `noUnusedLocals` enabled, generated `bindings.ts` may fail type-checking due internal helper types (e.g., `TAURI_CHANNEL`). Add a generated header via Specta export config (e.g., `// @ts-nocheck`) so strict frontend builds continue to pass.
 - TauRPC generates types at **runtime** (when the Rust binary executes), not at `cargo build` time. The dev flow requires running `bun tauri dev` at least once.
 - If `bindings.ts` doesn't exist when Vite starts, TypeScript will error. Keep a minimal placeholder until first generation.
 - The `RequestBody` enum in TypeScript will be a discriminated union. TauRPC/specta typically uses `{ type: "Json", data: string }` format. The Zustand store needs to construct this correctly.
