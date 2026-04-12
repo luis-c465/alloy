@@ -98,6 +98,8 @@ const getErrorMessage = (error: unknown): string => {
   return "Failed to send request";
 };
 
+let latestRequestToken = 0;
+
 export const useRequestStore = create<RequestStore>()((set, get) => ({
   method: "GET",
   url: "",
@@ -195,15 +197,23 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       body: toRequestBody(bodyType, bodyContent, bodyFormData, rawContentType),
     };
 
+    const requestToken = ++latestRequestToken;
+
     set({ isLoading: true, error: null });
 
     try {
       const response = await sendRequestApi(payload);
-      set({ response });
+      if (requestToken === latestRequestToken) {
+        set({ response });
+      }
     } catch (error) {
-      set({ error: getErrorMessage(error) });
+      if (requestToken === latestRequestToken) {
+        set({ error: getErrorMessage(error) });
+      }
     } finally {
-      set({ isLoading: false });
+      if (requestToken === latestRequestToken) {
+        set({ isLoading: false });
+      }
     }
   },
 }));
