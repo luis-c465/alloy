@@ -5,7 +5,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import CodeMirror from "@uiw/react-codemirror";
 import { useEffect, useState } from "react";
 
-import { useRequestStore } from "~/stores/request-store";
+import { useActiveTabField } from "~/hooks/useActiveTab";
 
 const MAX_PREVIEW_BYTES = 1024 * 1024;
 
@@ -29,12 +29,14 @@ const getContentType = (
     return "";
   }
 
-  const match = headers.find((header) => header.key.toLowerCase() === "content-type");
+  const match = headers.find(
+    (header) => header.key.toLowerCase() === "content-type",
+  );
   return match?.value.toLowerCase() ?? "";
 };
 
 export function ResponseBody() {
-  const response = useRequestStore((state) => state.response);
+  const response = useActiveTabField("response", null);
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -68,7 +70,8 @@ export function ResponseBody() {
     ? [json()]
     : contentType.includes("text/html")
       ? [html()]
-      : contentType.includes("text/xml") || contentType.includes("application/xml")
+      : contentType.includes("text/xml") ||
+          contentType.includes("application/xml")
         ? [xml()]
         : [];
 

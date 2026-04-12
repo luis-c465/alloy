@@ -5,11 +5,14 @@ import { ParamsEditor } from "~/components/request/ParamsEditor";
 import { SendButton } from "~/components/request/SendButton";
 import { UrlBar } from "~/components/request/UrlBar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { useActiveTabField } from "~/hooks/useActiveTab";
 import { useRequestStore } from "~/stores/request-store";
 
 export function RequestPanel() {
-  const activeRequestTab = useRequestStore((state) => state.activeRequestTab);
-  const setActiveRequestTab = useRequestStore((state) => state.setActiveRequestTab);
+  const activeRequestTab = useActiveTabField("activeRequestTab", "params");
+  const setActiveRequestTab = useRequestStore(
+    (state) => state.setActiveRequestTab,
+  );
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -22,7 +25,9 @@ export function RequestPanel() {
       <div className="min-h-0 flex-1 border-t border-border p-3">
         <Tabs
           value={activeRequestTab}
-          onValueChange={(tab) => setActiveRequestTab(tab as "params" | "headers" | "body")}
+          onValueChange={(tab) =>
+            setActiveRequestTab(tab as "params" | "headers" | "body")
+          }
           className="flex h-full min-h-0 flex-col gap-3"
         >
           <TabsList className="w-fit">

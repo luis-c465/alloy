@@ -7,14 +7,17 @@ import { ResponseHeaders } from "~/components/response/ResponseHeaders";
 import { StatusBar } from "~/components/response/StatusBar";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { useActiveTabField } from "~/hooks/useActiveTab";
 import { useRequestStore } from "~/stores/request-store";
 
 export function ResponsePanel() {
-  const response = useRequestStore((state) => state.response);
-  const isLoading = useRequestStore((state) => state.isLoading);
-  const error = useRequestStore((state) => state.error);
-  const activeResponseTab = useRequestStore((state) => state.activeResponseTab);
-  const setActiveResponseTab = useRequestStore((state) => state.setActiveResponseTab);
+  const response = useActiveTabField("response", null);
+  const isLoading = useActiveTabField("isLoading", false);
+  const error = useActiveTabField("error", null);
+  const activeResponseTab = useActiveTabField("activeResponseTab", "body");
+  const setActiveResponseTab = useRequestStore(
+    (state) => state.setActiveResponseTab,
+  );
   const [copied, setCopied] = useState(false);
 
   const showEmptyState = !response && !isLoading && !error;
@@ -53,13 +56,17 @@ export function ResponsePanel() {
 
           <Tabs
             value={activeResponseTab}
-            onValueChange={(tab) => setActiveResponseTab(tab as "body" | "headers")}
+            onValueChange={(tab) =>
+              setActiveResponseTab(tab as "body" | "headers")
+            }
             className="mt-3 flex min-h-0 flex-1 flex-col"
           >
             <div className="flex items-center justify-between gap-2">
               <TabsList className="w-fit">
                 <TabsTrigger value="body">Body</TabsTrigger>
-                <TabsTrigger value="headers">Headers ({headersCount})</TabsTrigger>
+                <TabsTrigger value="headers">
+                  Headers ({headersCount})
+                </TabsTrigger>
               </TabsList>
 
               {activeResponseTab === "body" ? (
@@ -77,11 +84,17 @@ export function ResponsePanel() {
               ) : null}
             </div>
 
-            <TabsContent value="body" className="mt-3 min-h-0 flex-1 overflow-hidden">
+            <TabsContent
+              value="body"
+              className="mt-3 min-h-0 flex-1 overflow-hidden"
+            >
               <ResponseBody />
             </TabsContent>
 
-            <TabsContent value="headers" className="mt-3 min-h-0 flex-1 overflow-hidden">
+            <TabsContent
+              value="headers"
+              className="mt-3 min-h-0 flex-1 overflow-hidden"
+            >
               <ResponseHeaders />
             </TabsContent>
           </Tabs>

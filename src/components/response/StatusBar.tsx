@@ -1,8 +1,13 @@
-import { IconAlertTriangle, IconClock, IconDatabase, IconLoader2 } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconClock,
+  IconDatabase,
+  IconLoader2,
+} from "@tabler/icons-react";
 
 import { Badge } from "~/components/ui/badge";
+import { useActiveTabField } from "~/hooks/useActiveTab";
 import { cn } from "~/lib/utils";
-import { useRequestStore } from "~/stores/request-store";
 
 const formatDuration = (timeMs: number): string => {
   if (timeMs >= 1000) {
@@ -50,9 +55,9 @@ const getBadgeClasses = (status: number): string => {
 };
 
 export function StatusBar() {
-  const response = useRequestStore((state) => state.response);
-  const isLoading = useRequestStore((state) => state.isLoading);
-  const error = useRequestStore((state) => state.error);
+  const response = useActiveTabField("response", null);
+  const isLoading = useActiveTabField("isLoading", false);
+  const error = useActiveTabField("error", null);
 
   if (isLoading) {
     return (
@@ -79,11 +84,17 @@ export function StatusBar() {
   const displayStatus = response.status_text
     ? `${response.status} ${response.status_text}`
     : `${response.status}`;
-  const responseSize = response.size_bytes > 0 ? response.size_bytes : new Blob([response.body]).size;
+  const responseSize =
+    response.size_bytes > 0
+      ? response.size_bytes
+      : new Blob([response.body]).size;
 
   return (
     <div className="flex min-h-9 flex-wrap items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-      <Badge variant="outline" className={cn("font-mono", getBadgeClasses(response.status))}>
+      <Badge
+        variant="outline"
+        className={cn("font-mono", getBadgeClasses(response.status))}
+      >
         {displayStatus}
       </Badge>
 

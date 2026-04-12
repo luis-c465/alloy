@@ -6,7 +6,14 @@ import CodeMirror from "@uiw/react-codemirror";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { KeyValueEditor } from "~/components/request/KeyValueEditor";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import { useActiveTabField } from "~/hooks/useActiveTab";
 import { cn } from "~/lib/utils";
 import { useRequestStore } from "~/stores/request-store";
 
@@ -25,10 +32,10 @@ const RAW_TYPE_OPTIONS = [
 ] as const;
 
 export function BodyEditor() {
-  const bodyType = useRequestStore((state) => state.bodyType);
-  const bodyContent = useRequestStore((state) => state.bodyContent);
-  const bodyFormData = useRequestStore((state) => state.bodyFormData);
-  const rawContentType = useRequestStore((state) => state.rawContentType);
+  const bodyType = useActiveTabField("bodyType", "none");
+  const bodyContent = useActiveTabField("bodyContent", "");
+  const bodyFormData = useActiveTabField("bodyFormData", []);
+  const rawContentType = useActiveTabField("rawContentType", "text/plain");
   const setBodyType = useRequestStore((state) => state.setBodyType);
   const setBodyContent = useRequestStore((state) => state.setBodyContent);
   const setBodyFormData = useRequestStore((state) => state.setBodyFormData);

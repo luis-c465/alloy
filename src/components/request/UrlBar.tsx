@@ -1,12 +1,15 @@
 import type { KeyboardEvent } from "react";
 
+import { useActiveTabField } from "~/hooks/useActiveTab";
 import { Input } from "~/components/ui/input";
 import { useRequestStore } from "~/stores/request-store";
 
 export function UrlBar() {
-  const url = useRequestStore((state) => state.url);
+  const url = useActiveTabField("url", "");
   const setUrl = useRequestStore((state) => state.setUrl);
-  const syncUrlToQueryParams = useRequestStore((state) => state.syncUrlToQueryParams);
+  const syncUrlToQueryParams = useRequestStore(
+    (state) => state.syncUrlToQueryParams,
+  );
   const sendRequest = useRequestStore((state) => state.sendRequest);
 
   const handleChange = (value: string) => {

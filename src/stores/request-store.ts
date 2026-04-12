@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  HttpFileRequest,
   HttpRequestData,
   HttpResponseData,
   KeyValue as ApiKeyValue,
@@ -11,11 +12,15 @@ export interface KeyValue extends ApiKeyValue {
   id: string;
 }
 
-type BodyType = "none" | "json" | "form-urlencoded" | "raw";
-type RequestTab = "params" | "headers" | "body";
-type ResponseTab = "body" | "headers";
+export type BodyType = "none" | "json" | "form-urlencoded" | "raw";
+export type RequestTab = "params" | "headers" | "body";
+export type ResponseTab = "body" | "headers";
 
-interface RequestStore {
+export interface Tab {
+  id: string;
+  name: string;
+  filePath: string | null;
+  isDirty: boolean;
   method: string;
   url: string;
   headers: KeyValue[];
@@ -29,6 +34,15 @@ interface RequestStore {
   error: string | null;
   activeRequestTab: RequestTab;
   activeResponseTab: ResponseTab;
+}
+
+interface RequestStore {
+  tabs: Tab[];
+  activeTabId: string | null;
+  createTab: (options?: Partial<Tab>) => string;
+  closeTab: (id: string) => void;
+  setActiveTab: (id: string) => void;
+  updateActiveTab: (patch: Partial<Tab>) => void;
   setMethod: (method: string) => void;
   setUrl: (url: string) => void;
   setHeaders: (headers: KeyValue[]) => void;
@@ -42,6 +56,9 @@ interface RequestStore {
   setError: (error: string | null) => void;
   setActiveRequestTab: (tab: RequestTab) => void;
   setActiveResponseTab: (tab: ResponseTab) => void;
+  markDirty: () => void;
+  markClean: () => void;
+  openRequestInTab: (request: HttpFileRequest, filePath: string) => string;
   syncQueryParamsToUrl: () => void;
   syncUrlToQueryParams: () => void;
   sendRequest: () => Promise<void>;
@@ -60,6 +77,13 @@ const toApiKeyValue = ({ key, value, enabled }: KeyValue): ApiKeyValue => ({
   enabled,
 });
 
+const fromApiKeyValue = ({ key, value, enabled }: ApiKeyValue): KeyValue => ({
+  key,
+  value,
+  enabled,
+  id: crypto.randomUUID(),
+});
+
 const toRequestBody = (
   bodyType: BodyType,
   bodyContent: string,
@@ -71,7 +95,9 @@ const toRequestBody = (
       return { Json: bodyContent };
     case "form-urlencoded":
       return {
-        FormUrlEncoded: bodyFormData.filter((item) => item.enabled).map(toApiKeyValue),
+        FormUrlEncoded: bodyFormData
+          .filter((item) => item.enabled)
+          .map(toApiKeyValue),
       };
     case "raw":
       return {
@@ -98,9 +124,45 @@ const getErrorMessage = (error: unknown): string => {
   return "Failed to send request";
 };
 
-let latestRequestToken = 0;
+const getBaseUrl = (url: string): string => {
+  try {
+    const parsedUrl = new URL(url);
+    parsedUrl.search = "";
+    return parsedUrl.toString();
+  } catch {
+    return url;
+  }
+};
 
-export const useRequestStore = create<RequestStore>()((set, get) => ({
+const parseQueryParamsFromUrl = (url: string): KeyValue[] => {
+  if (!url.trim()) {
+    return [];
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    const params: KeyValue[] = [];
+
+    for (const [key, value] of parsedUrl.searchParams.entries()) {
+      params.push({
+        key,
+        value,
+        enabled: true,
+        id: crypto.randomUUID(),
+      });
+    }
+
+    return params;
+  } catch {
+    return [];
+  }
+};
+
+const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => ({
+  id: crypto.randomUUID(),
+  name: "New Request",
+  filePath: null,
+  isDirty: false,
   method: "GET",
   url: "",
   headers: [createEmptyKeyValue()],
@@ -114,21 +176,181 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
   error: null,
   activeRequestTab: "params",
   activeResponseTab: "body",
-  setMethod: (method) => set({ method }),
-  setUrl: (url) => set({ url }),
-  setHeaders: (headers) => set({ headers }),
-  setQueryParams: (queryParams) => set({ queryParams }),
-  setBodyType: (bodyType) => set({ bodyType }),
-  setBodyContent: (bodyContent) => set({ bodyContent }),
-  setBodyFormData: (bodyFormData) => set({ bodyFormData }),
-  setRawContentType: (rawContentType) => set({ rawContentType }),
-  setResponse: (response) => set({ response }),
-  setLoading: (isLoading) => set({ isLoading }),
-  setError: (error) => set({ error }),
-  setActiveRequestTab: (activeRequestTab) => set({ activeRequestTab }),
-  setActiveResponseTab: (activeResponseTab) => set({ activeResponseTab }),
+  ...overrides,
+});
+
+const normalizeBodyType = (value: string): BodyType => {
+  if (value === "json" || value === "form-urlencoded" || value === "raw") {
+    return value;
+  }
+
+  return "none";
+};
+
+const parseFormDataBody = (body: string | null): KeyValue[] => {
+  if (!body?.trim()) {
+    return [createEmptyKeyValue()];
+  }
+
+  const params = new URLSearchParams(body);
+  const entries: KeyValue[] = [];
+
+  for (const [key, value] of params.entries()) {
+    entries.push({
+      key,
+      value,
+      enabled: true,
+      id: crypto.randomUUID(),
+    });
+  }
+
+  return entries.length > 0 ? entries : [createEmptyKeyValue()];
+};
+
+const latestRequestTokenByTab = new Map<string, number>();
+
+const getNextRequestToken = (tabId: string): number => {
+  const nextToken = (latestRequestTokenByTab.get(tabId) ?? 0) + 1;
+  latestRequestTokenByTab.set(tabId, nextToken);
+  return nextToken;
+};
+
+const updateTabById = (
+  tabs: Tab[],
+  tabId: string,
+  patch: Partial<Tab>,
+): Tab[] => tabs.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab));
+
+const initialTab = createDefaultTab();
+
+export const useRequestStore = create<RequestStore>()((set, get) => ({
+  tabs: [initialTab],
+  activeTabId: initialTab.id,
+  createTab: (options) => {
+    const tab = createDefaultTab(options);
+    set((state) => ({
+      tabs: [...state.tabs, tab],
+      activeTabId: tab.id,
+    }));
+    return tab.id;
+  },
+  closeTab: (id) => {
+    set((state) => {
+      if (state.tabs.length <= 1) {
+        const tab = createDefaultTab();
+        return {
+          tabs: [tab],
+          activeTabId: tab.id,
+        };
+      }
+
+      const currentIndex = state.tabs.findIndex((tab) => tab.id === id);
+      if (currentIndex === -1) {
+        return state;
+      }
+
+      const nextTabs = state.tabs.filter((tab) => tab.id !== id);
+      latestRequestTokenByTab.delete(id);
+
+      if (state.activeTabId !== id) {
+        return { tabs: nextTabs };
+      }
+
+      const nextActiveTab = nextTabs[currentIndex] ?? nextTabs[currentIndex - 1] ?? null;
+      return {
+        tabs: nextTabs,
+        activeTabId: nextActiveTab?.id ?? null,
+      };
+    });
+  },
+  setActiveTab: (id) => {
+    set((state) => {
+      if (!state.tabs.some((tab) => tab.id === id)) {
+        return state;
+      }
+
+      return { activeTabId: id };
+    });
+  },
+  updateActiveTab: (patch) => {
+    set((state) => {
+      const activeTabId = state.activeTabId ?? state.tabs[0]?.id ?? null;
+      if (!activeTabId) {
+        return state;
+      }
+
+      return {
+        activeTabId,
+        tabs: updateTabById(state.tabs, activeTabId, patch),
+      };
+    });
+  },
+  setMethod: (method) => get().updateActiveTab({ method, isDirty: true }),
+  setUrl: (url) => get().updateActiveTab({ url, isDirty: true }),
+  setHeaders: (headers) => get().updateActiveTab({ headers, isDirty: true }),
+  setQueryParams: (queryParams) =>
+    get().updateActiveTab({ queryParams, isDirty: true }),
+  setBodyType: (bodyType) => get().updateActiveTab({ bodyType, isDirty: true }),
+  setBodyContent: (bodyContent) =>
+    get().updateActiveTab({ bodyContent, isDirty: true }),
+  setBodyFormData: (bodyFormData) =>
+    get().updateActiveTab({ bodyFormData, isDirty: true }),
+  setRawContentType: (rawContentType) =>
+    get().updateActiveTab({ rawContentType, isDirty: true }),
+  setResponse: (response) => get().updateActiveTab({ response }),
+  setLoading: (isLoading) => get().updateActiveTab({ isLoading }),
+  setError: (error) => get().updateActiveTab({ error }),
+  setActiveRequestTab: (activeRequestTab) => get().updateActiveTab({ activeRequestTab }),
+  setActiveResponseTab: (activeResponseTab) =>
+    get().updateActiveTab({ activeResponseTab }),
+  markDirty: () => get().updateActiveTab({ isDirty: true }),
+  markClean: () => get().updateActiveTab({ isDirty: false }),
+  openRequestInTab: (request, filePath) => {
+    const normalizedBodyType = normalizeBodyType(request.body_type);
+    const tabName = request.name?.trim() || "New Request";
+    const tab = createDefaultTab({
+      name: tabName,
+      filePath,
+      isDirty: false,
+      method: request.method || "GET",
+      url: request.url,
+      headers: request.headers.map(fromApiKeyValue),
+      queryParams: parseQueryParamsFromUrl(request.url),
+      bodyType: normalizedBodyType,
+      bodyContent: request.body ?? "",
+      bodyFormData:
+        normalizedBodyType === "form-urlencoded"
+          ? parseFormDataBody(request.body)
+          : [createEmptyKeyValue()],
+      rawContentType:
+        normalizedBodyType === "json" ? "application/json" : "text/plain",
+      response: null,
+      isLoading: false,
+      error: null,
+      activeRequestTab: "params",
+      activeResponseTab: "body",
+    });
+
+    set((state) => ({
+      tabs: [...state.tabs, tab],
+      activeTabId: tab.id,
+    }));
+
+    return tab.id;
+  },
   syncQueryParamsToUrl: () => {
-    const { url, queryParams } = get();
+    const { tabs, activeTabId } = get();
+    const targetTabId = activeTabId ?? tabs[0]?.id ?? null;
+    if (!targetTabId) {
+      return;
+    }
+
+    const activeTab = tabs.find((tab) => tab.id === targetTabId);
+    if (!activeTab) {
+      return;
+    }
+
+    const { url, queryParams } = activeTab;
 
     if (!url.trim()) {
       return;
@@ -146,16 +368,37 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
         parsedUrl.searchParams.append(param.key, param.value);
       }
 
-      set({ url: parsedUrl.toString() });
+      set((state) => ({
+        tabs: updateTabById(state.tabs, targetTabId, {
+          url: parsedUrl.toString(),
+          isDirty: true,
+        }),
+      }));
     } catch {
       // Ignore malformed URLs while the user is typing.
     }
   },
   syncUrlToQueryParams: () => {
-    const { url } = get();
+    const { tabs, activeTabId } = get();
+    const targetTabId = activeTabId ?? tabs[0]?.id ?? null;
+    if (!targetTabId) {
+      return;
+    }
+
+    const activeTab = tabs.find((tab) => tab.id === targetTabId);
+    if (!activeTab) {
+      return;
+    }
+
+    const { url } = activeTab;
 
     if (!url.trim()) {
-      set({ queryParams: [] });
+      set((state) => ({
+        tabs: updateTabById(state.tabs, targetTabId, {
+          queryParams: [],
+          isDirty: true,
+        }),
+      }));
       return;
     }
 
@@ -172,57 +415,74 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
         });
       }
 
-      set({ queryParams: params });
+      set((state) => ({
+        tabs: updateTabById(state.tabs, targetTabId, {
+          queryParams: params,
+          isDirty: true,
+        }),
+      }));
     } catch {
       // Ignore malformed URLs while the user is typing.
     }
   },
   sendRequest: async () => {
-    const {
-      method,
-      url,
-      headers,
-      queryParams,
-      bodyType,
-      bodyContent,
-      bodyFormData,
-      rawContentType,
-    } = get();
+    const { tabs, activeTabId } = get();
+    const targetTabId = activeTabId ?? tabs[0]?.id ?? null;
+    if (!targetTabId) {
+      return;
+    }
 
-    const urlWithoutQueryParams = (() => {
-      try {
-        const parsedUrl = new URL(url);
-        parsedUrl.search = "";
-        return parsedUrl.toString();
-      } catch {
-        return url;
-      }
-    })();
+    const tab = tabs.find((item) => item.id === targetTabId);
+    if (!tab) {
+      return;
+    }
 
     const payload: HttpRequestData = {
-      method,
-      url: urlWithoutQueryParams,
-      headers: headers.filter((header) => header.enabled).map(toApiKeyValue),
-      query_params: queryParams.filter((param) => param.enabled).map(toApiKeyValue),
-      body: toRequestBody(bodyType, bodyContent, bodyFormData, rawContentType),
+      method: tab.method,
+      url: getBaseUrl(tab.url),
+      headers: tab.headers.filter((header) => header.enabled).map(toApiKeyValue),
+      query_params: tab.queryParams
+        .filter((param) => param.enabled)
+        .map(toApiKeyValue),
+      body: toRequestBody(
+        tab.bodyType,
+        tab.bodyContent,
+        tab.bodyFormData,
+        tab.rawContentType,
+      ),
     };
 
-    const requestToken = ++latestRequestToken;
+    const requestToken = getNextRequestToken(targetTabId);
 
-    set({ isLoading: true, error: null });
+    set((state) => ({
+      tabs: updateTabById(state.tabs, targetTabId, {
+        isLoading: true,
+        error: null,
+      }),
+    }));
 
     try {
       const response = await sendRequestApi(payload);
-      if (requestToken === latestRequestToken) {
-        set({ response });
+      if (requestToken === latestRequestTokenByTab.get(targetTabId)) {
+        set((state) => ({
+          tabs: updateTabById(state.tabs, targetTabId, { response }),
+        }));
       }
     } catch (error) {
-      if (requestToken === latestRequestToken) {
-        set({ error: getErrorMessage(error) });
+      if (requestToken === latestRequestTokenByTab.get(targetTabId)) {
+        set((state) => ({
+          tabs: updateTabById(state.tabs, targetTabId, {
+            error: getErrorMessage(error),
+          }),
+        }));
       }
     } finally {
-      if (requestToken === latestRequestToken) {
-        set({ isLoading: false });
+      if (requestToken === latestRequestTokenByTab.get(targetTabId)) {
+        set((state) => ({
+          tabs: updateTabById(state.tabs, targetTabId, {
+            isLoading: false,
+          }),
+        }));
       }
     }
   },

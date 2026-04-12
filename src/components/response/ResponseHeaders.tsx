@@ -1,7 +1,7 @@
-import { useRequestStore } from "~/stores/request-store";
+import { useActiveTabField } from "~/hooks/useActiveTab";
 
 export function ResponseHeaders() {
-  const response = useRequestStore((state) => state.response);
+  const response = useActiveTabField("response", null);
 
   if (!response || response.headers.length === 0) {
     return (

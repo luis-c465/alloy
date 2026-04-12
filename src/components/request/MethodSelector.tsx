@@ -6,9 +6,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { useActiveTabField } from "~/hooks/useActiveTab";
 import { cn } from "~/lib/utils";
 
-const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
+const HTTP_METHODS = [
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+] as const;
 
 const methodColorClasses: Record<(typeof HTTP_METHODS)[number], string> = {
   GET: "text-emerald-600 dark:text-emerald-400",
@@ -21,16 +30,23 @@ const methodColorClasses: Record<(typeof HTTP_METHODS)[number], string> = {
 };
 
 export function MethodSelector() {
-  const method = useRequestStore((state) => state.method);
+  const method = useActiveTabField("method", "GET");
   const setMethod = useRequestStore((state) => state.setMethod);
 
-  const normalizedMethod = (HTTP_METHODS.includes(method as (typeof HTTP_METHODS)[number])
-    ? method
-    : "GET") as (typeof HTTP_METHODS)[number];
+  const normalizedMethod = (
+    HTTP_METHODS.includes(method as (typeof HTTP_METHODS)[number])
+      ? method
+      : "GET"
+  ) as (typeof HTTP_METHODS)[number];
 
   return (
     <Select value={normalizedMethod} onValueChange={setMethod}>
-      <SelectTrigger className={cn("w-[120px] font-semibold", methodColorClasses[normalizedMethod])}>
+      <SelectTrigger
+        className={cn(
+          "w-[120px] font-semibold",
+          methodColorClasses[normalizedMethod],
+        )}
+      >
         <SelectValue placeholder="Method" />
       </SelectTrigger>
       <SelectContent>

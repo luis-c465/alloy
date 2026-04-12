@@ -660,9 +660,12 @@ The app layout shifts from a simple vertical split (request/response) to a three
 - The existing UI components (`MethodSelector`, `UrlBar`, etc.) should read from the active tab, not the store root.
 
 **Scope:**
+> **Updated by Step 7 executor:** Added `TabBar.tsx` wiring in this step (create/close/switch tabs) because Step 7 verification explicitly requires `+` tab creation and close/switch behavior.
+
 - Rewrite: `src/stores/request-store.ts` (complete refactor)
 - Create: `src/stores/workspace-store.ts` (workspace, sidebar, environment state)
 - Create: `src/hooks/useActiveTab.ts` (convenience hook for accessing active tab state)
+- Modify: `src/components/layout/TabBar.tsx` (wire create/close/switch to tab store for Step 7 verification)
 
 **Sub-tasks:**
 

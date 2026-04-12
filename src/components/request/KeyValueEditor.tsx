@@ -19,7 +19,8 @@ const createEmptyRow = (): KeyValue => ({
   id: crypto.randomUUID(),
 });
 
-const isEmptyRow = (item: KeyValue): boolean => !item.key.trim() && !item.value.trim();
+const isEmptyRow = (item: KeyValue): boolean =>
+  !item.key.trim() && !item.value.trim();
 
 const ensureTrailingEmptyRow = (items: KeyValue[]): KeyValue[] => {
   if (items.length === 0) {
@@ -43,7 +44,9 @@ export function KeyValueEditor({
   const rows = items.length > 0 ? items : [createEmptyRow()];
 
   const updateRow = (rowId: string, patch: Partial<KeyValue>) => {
-    const nextRows = rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row));
+    const nextRows = rows.map((row) =>
+      row.id === rowId ? { ...row, ...patch } : row,
+    );
     onChange(ensureTrailingEmptyRow(nextRows));
   };
 
@@ -68,12 +71,17 @@ export function KeyValueEditor({
 
       <div className="divide-y divide-border">
         {rows.map((item) => (
-          <div key={item.id} className="grid grid-cols-[40px_1fr_1fr_36px] items-center gap-2 px-2 py-1.5">
+          <div
+            key={item.id}
+            className="grid grid-cols-[40px_1fr_1fr_36px] items-center gap-2 px-2 py-1.5"
+          >
             <div className="flex justify-center">
               <input
                 type="checkbox"
                 checked={item.enabled}
-                onChange={(event) => updateRow(item.id, { enabled: event.target.checked })}
+                onChange={(event) =>
+                  updateRow(item.id, { enabled: event.target.checked })
+                }
                 aria-label="Toggle entry"
                 className="size-3.5 rounded border-border"
               />
@@ -82,7 +90,9 @@ export function KeyValueEditor({
             <Input
               value={item.key}
               placeholder={keyPlaceholder}
-              onChange={(event) => updateRow(item.id, { key: event.target.value })}
+              onChange={(event) =>
+                updateRow(item.id, { key: event.target.value })
+              }
               className={cn(
                 "h-7 rounded-sm border-input/70 bg-transparent text-xs",
                 "font-mono",
@@ -92,7 +102,9 @@ export function KeyValueEditor({
             <Input
               value={item.value}
               placeholder={valuePlaceholder}
-              onChange={(event) => updateRow(item.id, { value: event.target.value })}
+              onChange={(event) =>
+                updateRow(item.id, { value: event.target.value })
+              }
               className={cn(
                 "h-7 rounded-sm border-input/70 bg-transparent text-xs",
                 "font-mono",
