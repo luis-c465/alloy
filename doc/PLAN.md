@@ -207,10 +207,12 @@ Response Viewer UI
 **Sub-tasks:**
 
 1. **Install npm dependencies.** Run the following:
-   - `bun add zustand` — state management
-   - `bun add @uiw/react-codemirror @codemirror/lang-json @codemirror/lang-xml @codemirror/lang-html @codemirror/themes` — CodeMirror 6 with language support
-   - `bun add taurpc` — TauRPC frontend client
-   - `bun add react-resizable-panels` — resizable split panes (lightweight, well-maintained, works great for IDE-like layouts)
+    - `bun add zustand` — state management
+    - `bun add @uiw/react-codemirror @codemirror/lang-json @codemirror/lang-xml @codemirror/lang-html @codemirror/themes` — CodeMirror 6 with language support
+    - `bun add taurpc` — TauRPC frontend client
+    - `bun add react-resizable-panels` — resizable split panes (lightweight, well-maintained, works great for IDE-like layouts)
+
+   > **Updated by Step 2 executor:** `@codemirror/themes` is not a published npm package (404). Use `@codemirror/theme-one-dark` (plus language packages) instead.
 
 2. **Remove `.tanstack/` directory.** Delete the entire `.tanstack/` directory from the project root.
 
@@ -252,12 +254,14 @@ Response Viewer UI
    Define a local `KeyValue` interface: `{ key: string; value: string; enabled: boolean; id: string }`. The `id` field is a client-side UUID for React list keys (not sent to backend).
 
 5. **Create `src/App.tsx`.** This is the main app layout:
-   - Import `PanelGroup`, `Panel`, `PanelResizeHandle` from `react-resizable-panels`
-   - Render a vertical `PanelGroup` with:
+    - Import `PanelGroup`, `Panel`, `PanelResizeHandle` from `react-resizable-panels`
+    - Render a vertical `PanelGroup` with:
      - Top `Panel` (minSize ~30%, defaultSize 50%): renders `<RequestPanel />`
      - `PanelResizeHandle`: a thin horizontal divider bar (styled with Tailwind — `h-1 bg-border hover:bg-primary/20 transition-colors`)
      - Bottom `Panel` (minSize ~20%, defaultSize 50%): renders `<ResponsePanel />`
-   - The outermost div should be `h-screen w-screen flex flex-col overflow-hidden` with `bg-background text-foreground`
+    - The outermost div should be `h-screen w-screen flex flex-col overflow-hidden` with `bg-background text-foreground`
+
+   > **Updated by Step 2 executor:** In `react-resizable-panels@4.x`, exports are `Group`, `Panel`, and `Separator`. Import with aliases: `Group as PanelGroup` and `Separator as PanelResizeHandle`.
 
 6. **Create `src/components/request/RequestPanel.tsx`.** A placeholder component that renders a div with text "Request Builder" and applies basic layout classes (`flex flex-col h-full overflow-hidden`).
 
