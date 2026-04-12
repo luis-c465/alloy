@@ -128,6 +128,8 @@ The app layout shifts from a simple vertical split (request/response) to a three
 
 **Sub-tasks:**
 
+> **Updated by Step 5 executor:** In this Taurpc/Tauri combination, `AppHandle` cannot be used as an injected resolver parameter (it is treated as a deserializable IPC arg). To keep `pick_workspace_folder()` zero-argument on the frontend and still use dialogs/DB created in `.setup()`, shared runtime state is passed via `Arc<tokio::sync::OnceCell<...>>` on resolver structs (`AppHandle` for workspace + `Arc<HistoryDb>` for history/http).
+
 > **Updated by Step 1 executor:** `rusqlite = "0.35"` and `rest_parser = "0.2"` are not published versions on crates.io. Use `rusqlite = "0.39"` and `rest_parser = "0.1"` (resolved to `0.1.7`) for a compiling setup.
 
 1. **Add dependencies to `Cargo.toml`.** Add after the existing dependencies:
@@ -519,13 +521,13 @@ The app layout shifts from a simple vertical split (request/response) to a three
        async fn clear_history() -> Result<(), AppError>;
    }
    ```
-   Implement `HistoryApiImpl` with an `Arc<HistoryDb>` field for database access.
+    Implement `HistoryApiImpl` with shared database access. If DB initialization occurs in `.setup()`, use `Arc<tokio::sync::OnceCell<Arc<HistoryDb>>>` (or equivalent) so resolvers can access the initialized DB safely.
 
 4. **Modify `src-tauri/src/commands/http.rs`.** Update the `send_request` resolver to:
    - Accept an optional `environment_name: Option<String>` and `workspace_path: Option<String>` parameter (or add a new procedure `send_request_with_env`).
    - If environment info is provided: load the environment variables, use `resolver::resolve_request` to substitute `{{variables}}` in the request before sending.
    - After receiving the response: insert a `HistoryEntry` into the database.
-   - Update the `ApiImpl` struct to hold `Arc<HistoryDb>` and a `Handlebars` instance.
+    - Update the `ApiImpl` struct to hold shared DB access (`Arc<HistoryDb>` directly, or an initialized-on-setup wrapper such as `Arc<tokio::sync::OnceCell<Arc<HistoryDb>>>`) and a `Handlebars` instance.
 
 5. **Modify `src-tauri/src/commands/mod.rs`.** Add:
    ```

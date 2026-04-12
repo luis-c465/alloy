@@ -5,35 +5,70 @@ mod history;
 mod http;
 mod workspace;
 
-use commands::http::{Api, ApiImpl};
+use commands::{
+    environment::{EnvironmentApi, EnvironmentApiImpl},
+    history::{HistoryApi, HistoryApiImpl},
+    http::{Api, ApiImpl},
+    workspace::{WorkspaceApi, WorkspaceApiImpl},
+};
+use environment::resolver;
 use history::db::HistoryDb;
 use specta_typescript::{BigIntExportBehavior, Typescript};
 use std::sync::Arc;
 use tauri::Manager;
 use taurpc::Router;
+use tokio::sync::OnceCell;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
+    let db = Arc::new(OnceCell::<Arc<HistoryDb>>::new());
+    let app_handle = Arc::new(OnceCell::<tauri::AppHandle<tauri::Wry>>::new());
+    let hbs = Arc::new(resolver::create_resolver());
+
     let router = Router::new()
         .export_config(
             Typescript::default()
                 .header("// @ts-nocheck\n")
                 .bigint(BigIntExportBehavior::Number),
         )
-        .merge(ApiImpl.into_handler());
+        .merge(
+            ApiImpl {
+                db: db.clone(),
+                hbs: hbs.clone(),
+            }
+            .into_handler(),
+        )
+        .merge(
+            WorkspaceApiImpl {
+                app_handle: app_handle.clone(),
+            }
+            .into_handler(),
+        )
+        .merge(EnvironmentApiImpl { hbs: hbs.clone() }.into_handler())
+        .merge(HistoryApiImpl { db: db.clone() }.into_handler());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .setup(|app| {
+        .setup(move |app| {
             let app_data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&app_data_dir)?;
 
-            let db_path = app_data_dir.join("history.db");
-            let db = HistoryDb::new(&db_path)
-                .map_err(|error| std::io::Error::other(error.to_string()))?;
+            app_handle
+                .set(app.handle().clone())
+                .map_err(|_| std::io::Error::other("App handle was initialized more than once"))?;
 
-            app.manage(Arc::new(db));
+            let db_path = app_data_dir.join("history.db");
+            let history_db = Arc::new(
+                HistoryDb::new(&db_path)
+                    .map_err(|error| std::io::Error::other(error.to_string()))?,
+            );
+
+            db.set(history_db.clone()).map_err(|_| {
+                std::io::Error::other("History database was initialized more than once")
+            })?;
+
+            app.manage(history_db);
 
             Ok(())
         })

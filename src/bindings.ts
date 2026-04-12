@@ -5,7 +5,23 @@ import { createTauRPCProxy as createProxy, type InferCommandOutput } from 'taurp
 type TAURI_CHANNEL<T> = (response: T) => void
 
 
-export type AppError = { RequestError: string } | { InvalidUrl: string } | "Timeout" | { NetworkError: string }
+export type AppError = { RequestError: string } | { IoError: string } | { ParseError: string } | { SerializationError: string } | { InvalidUrl: string } | "Timeout" | { NetworkError: string }
+
+export type EnvironmentData = { name: string; variables: KeyValue[] }
+
+export type EnvironmentList = { environments: EnvironmentData[]; active: string | null }
+
+export type FileEntry = { name: string; path: string; is_dir: boolean; children: FileEntry[] | null }
+
+export type HistoryEntry = { id: number; method: string; url: string; status: number | null; status_text: string | null; time_ms: number | null; size_bytes: number | null; timestamp: string; request_headers: string; request_body: string | null; response_headers: string | null; response_body: string | null }
+
+export type HistoryFilter = { query: string | null; method: string | null; status_min: number | null; status_max: number | null; limit: number }
+
+export type HistoryListEntry = { id: number; method: string; url: string; status: number | null; time_ms: number | null; timestamp: string }
+
+export type HttpFileData = { path: string; requests: HttpFileRequest[]; variables: KeyValue[] }
+
+export type HttpFileRequest = { name: string | null; method: string; url: string; headers: KeyValue[]; body: string | null; body_type: string; commands: ([string, string | null])[] }
 
 export type HttpRequestData = { method: string; url: string; headers: KeyValue[]; query_params: KeyValue[]; body: RequestBody }
 
@@ -15,8 +31,28 @@ export type KeyValue = { key: string; value: string; enabled: boolean }
 
 export type RequestBody = "None" | { Json: string } | { FormUrlEncoded: KeyValue[] } | { Raw: { content: string; content_type: string } }
 
-const ARGS_MAP = { '':'{"send_request":["request"]}' }
-export type Router = { "": {send_request: (request: HttpRequestData) => Promise<HttpResponseData>} };
+const ARGS_MAP = { '':'{"send_request":["request"],"send_request_with_env":["request","environment_name","workspace_path"]}', 'environment':'{"delete_environment":["workspace_path","name"],"list_environments":["workspace_path"],"read_environment":["workspace_path","name"],"resolve_url_preview":["url","workspace_path","env_name"],"save_environment":["workspace_path","env"],"set_active_environment":["workspace_path","name"]}', 'history':'{"clear_history":[],"delete_history_entry":["id"],"get_history_entry":["id"],"list_history":["filter"]}', 'workspace':'{"create_directory":["parent_path","dir_name"],"create_http_file":["dir_path","file_name"],"delete_path":["target_path"],"ensure_workspace":["workspace_path"],"list_files":["workspace_path"],"pick_workspace_folder":[],"read_http_file":["file_path"],"rename_path":["from_path","to_path"],"write_http_file":["file_path","data"]}' }
+export type Router = { "": {send_request: (request: HttpRequestData) => Promise<HttpResponseData>, 
+send_request_with_env: (request: HttpRequestData, environmentName: string | null, workspacePath: string | null) => Promise<HttpResponseData>},
+"environment": {delete_environment: (workspacePath: string, name: string) => Promise<null>, 
+list_environments: (workspacePath: string) => Promise<EnvironmentList>, 
+read_environment: (workspacePath: string, name: string) => Promise<EnvironmentData>, 
+resolve_url_preview: (url: string, workspacePath: string, envName: string | null) => Promise<string>, 
+save_environment: (workspacePath: string, env: EnvironmentData) => Promise<null>, 
+set_active_environment: (workspacePath: string, name: string | null) => Promise<null>},
+"history": {clear_history: () => Promise<null>, 
+delete_history_entry: (id: number) => Promise<null>, 
+get_history_entry: (id: number) => Promise<HistoryEntry | null>, 
+list_history: (filter: HistoryFilter) => Promise<HistoryListEntry[]>},
+"workspace": {create_directory: (parentPath: string, dirName: string) => Promise<string>, 
+create_http_file: (dirPath: string, fileName: string) => Promise<string>, 
+delete_path: (targetPath: string) => Promise<null>, 
+ensure_workspace: (workspacePath: string) => Promise<null>, 
+list_files: (workspacePath: string) => Promise<FileEntry[]>, 
+pick_workspace_folder: () => Promise<string | null>, 
+read_http_file: (filePath: string) => Promise<HttpFileData>, 
+rename_path: (fromPath: string, toPath: string) => Promise<null>, 
+write_http_file: (filePath: string, data: HttpFileData) => Promise<null>} };
 
 
 export const createTauRPCProxy = () => createProxy<Router>(ARGS_MAP)
