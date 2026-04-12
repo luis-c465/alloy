@@ -5,6 +5,12 @@ use thiserror::Error;
 pub enum AppError {
     #[error("Request error: {0}")]
     RequestError(String),
+    #[error("I/O error: {0}")]
+    IoError(String),
+    #[error("Parse error: {0}")]
+    ParseError(String),
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),
     #[error("Request timed out")]
@@ -31,5 +37,11 @@ impl From<reqwest::Error> for AppError {
         } else {
             Self::RequestError(value.to_string())
         }
+    }
+}
+
+impl From<std::io::Error> for AppError {
+    fn from(value: std::io::Error) -> Self {
+        Self::IoError(value.to_string())
     }
 }

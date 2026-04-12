@@ -1,6 +1,7 @@
 mod commands;
 mod error;
 mod http;
+mod workspace;
 
 use commands::http::{Api, ApiImpl};
 use specta_typescript::{BigIntExportBehavior, Typescript};
