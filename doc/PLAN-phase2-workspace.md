@@ -571,6 +571,8 @@ The app layout shifts from a simple vertical split (request/response) to a three
 
 ### Step 6: Frontend — App Layout Restructure
 
+> **Updated by Step 6 executor:** Installed `react-resizable-panels` v4 uses `useDefaultLayout({ id, storage })` + `onLayoutChanged` for persisted layout state. `autoSaveId`/`onLayout` are not available in this version.
+
 **Objective:** Redesign the app layout from a simple vertical split into a three-panel IDE-like layout: a collapsible sidebar on the left, a tab bar at the top of the main content area, and the existing request/response panels in the content area.
 
 **Context:**
@@ -632,8 +634,9 @@ The app layout shifts from a simple vertical split (request/response) to a three
 
 **Edge Cases & Gotchas:**
 - **Nested PanelGroups:** `react-resizable-panels` supports nesting. The outer group is horizontal (sidebar | content), the inner group is vertical (request | response). Both need unique `autoSaveId` props for persistent sizing.
+- **Nested PanelGroups:** `react-resizable-panels` supports nesting. The outer group is horizontal (sidebar | content), the inner group is vertical (request | response). In v4, persist sizing with `useDefaultLayout` and unique group IDs.
 - **Sidebar collapse:** When collapsed, the sidebar panel should shrink to 0. The resize handle should have a double-click to toggle collapse.
-- **Responsive layout:** At very narrow widths (<800px), the sidebar should auto-collapse. Use the `onLayout` callback from PanelGroup to detect narrow widths.
+- **Responsive layout:** At very narrow widths (<800px), the sidebar should auto-collapse. In v4, use `onLayoutChanged`/resize events (there is no `onLayout` prop).
 - **Tab bar overflow:** When many tabs are open, the tab bar should scroll horizontally. Use `overflow-x-auto` with `scrollbar-hide` class.
 
 **Verification:**
