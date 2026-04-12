@@ -1,6 +1,7 @@
 import { IconClock, IconFolder } from "@tabler/icons-react";
 import { useState } from "react";
 
+import { CollectionsPanel } from "~/components/sidebar/CollectionsPanel";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 
@@ -30,9 +31,7 @@ export function Sidebar() {
 
       <ScrollArea className="min-h-0 flex-1">
         {activeTab === "collections" ? (
-          <div className="p-3 text-xs text-muted-foreground">
-            Collections panel placeholder
-          </div>
+          <CollectionsPanel />
         ) : (
           <div className="p-3 text-xs text-muted-foreground">
             History panel placeholder
