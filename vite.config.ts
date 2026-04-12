@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import { reactCompilerPreset } from "@vitejs/plugin-react";
-import { tanstackRouter } from "@tanstack/router-plugin/vite";
+
 import path from "path";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -8,14 +8,7 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [
-    tanstackRouter({
-      target: "react",
-      autoCodeSplitting: true,
-    }),
-    reactCompilerPreset(),
-    tailwindcss(),
-  ],
+  plugins: [reactCompilerPreset(), tailwindcss()],
   resolve: {
     alias: {
       "~": path.resolve(__dirname, "./src"),
