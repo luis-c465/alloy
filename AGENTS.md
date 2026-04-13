@@ -22,20 +22,20 @@ Response Viewer UI
 
 ## Tech Stack
 
-| Layer | Technology | Notes |
-|-------|-----------|-------|
-| Desktop framework | Tauri v2 | Single window desktop app |
-| IPC | TauRPC 0.7 | Auto-generates `src/bindings.ts` from Rust traits |
-| HTTP engine | Reqwest 0.12 | rustls-tls, multipart, cookies |
-| State management | Zustand 5 | Multi-tab store, workspace store, theme store |
-| Code editor | CodeMirror 6 | `@uiw/react-codemirror` with JSON/XML/HTML modes |
-| UI components | shadcn + Radix | Pre-installed: button, dialog, input, select, tabs, etc. |
-| Styling | Tailwind CSS 4 | `@tailwindcss/vite` plugin |
-| Icons | @tabler/icons-react | |
-| DB | rusqlite 0.39 (bundled) | SQLite for request history |
-| File parsing | rest_parser 0.1 | `.http` file format |
-| Templating | Handlebars 6 | `{{variable}}` resolution at send-time |
-| Package manager | Bun | Use `bun add`, `bun run dev`, etc. |
+| Layer | Technology | Notes | Docs |
+|-------|------------|-------|------|
+| Desktop framework | Tauri v2 | Single window desktop app | [llms.txt](https://v2.tauri.app/llms.txt) · [llms-full.txt](https://v2.tauri.app/llms-full.txt) |
+| IPC | TauRPC 0.7 | Auto-generates `src/bindings.ts` from Rust traits | [crates.io](https://docs.rs/crate/taurpc/latest) · [GitHub](https://github.com/MatsDK/TauRPC) |
+| HTTP engine | Reqwest 0.12 | rustls-tls, multipart, cookies | [docs.rs](https://docs.rs/reqwest/latest/reqwest/) · [GitHub](https://github.com/seanmonstar/reqwest) |
+| State management | Zustand 5 | Multi-tab store, workspace store, theme store | [llms.txt](https://zustand.docs.pmnd.rs/llms.txt) · [llms-full.txt](https://zustand.docs.pmnd.rs/llms-full.txt) |
+| Code editor | CodeMirror 6 | `@uiw/react-codemirror` with JSON/XML/HTML modes | [docs](https://codemirror.net/docs/) · [GitHub](https://github.com/codemirror) |
+| UI components | shadcn + Radix | Pre-installed: button, dialog, input, select, tabs, etc. | [llms.txt](https://ui.shadcn.com/llms.txt) · [llms-full.txt](https://ui.shadcn.com/llms-full.txt) |
+| Styling | Tailwind CSS 4 | `@tailwindcss/vite` plugin | [tailwindcss.com](https://tailwindcss.com/) |
+| Icons | @tabler/icons-react | | [GitHub](https://github.com/tabler/tabler-icons) |
+| DB | rusqlite 0.39 (bundled) | SQLite for request history | [docs.rs](https://docs.rs/rusqlite/latest/rusqlite/) · [GitHub](https://github.com/rusqlite/rusqlite) |
+| File parsing | rest_parser 0.1 | `.http` file format | [docs.rs](https://docs.rs/rest_parser/latest/rest_parser/) · [GitHub](https://github.com/benfaerber/rest_parser) |
+| Templating | Handlebars 6 | `{{variable}}` resolution at send-time | [docs.rs](https://docs.rs/handlebars/latest/handlebars/) · [GitHub](https://github.com/sunng87/handlebars-rust) |
+| Package manager | Bun | Use `bun add`, `bun run dev`, etc. | [llms.txt](https://bun.sh/llms.txt) · [llms-full.txt](https://bun.sh/llms-full.txt) |
 
 ## Project Structure
 
@@ -192,7 +192,7 @@ GET {{base_url}}/users HTTP/1.1
 Authorization: Bearer {{token}}
 
 ### Create User
-# @name CreateUser  
+# @name CreateUser
 POST {{base_url}}/users HTTP/1.1
 Content-Type: application/json
 
