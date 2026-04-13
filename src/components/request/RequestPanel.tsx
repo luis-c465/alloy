@@ -1,3 +1,4 @@
+import { AuthEditor } from "~/components/request/AuthEditor";
 import { BodyEditor } from "~/components/request/BodyEditor";
 import { HeadersEditor } from "~/components/request/HeadersEditor";
 import { MethodSelector } from "~/components/request/MethodSelector";
@@ -11,6 +12,7 @@ import { useRequestStore } from "~/stores/request-store";
 
 export function RequestPanel() {
   const activeRequestTab = useActiveTabField("activeRequestTab", "params");
+  const authType = useActiveTabField("authType", "none");
   const setActiveRequestTab = useRequestStore(
     (state) => state.setActiveRequestTab,
   );
@@ -29,7 +31,7 @@ export function RequestPanel() {
         <Tabs
           value={activeRequestTab}
           onValueChange={(tab) =>
-            setActiveRequestTab(tab as "params" | "headers" | "body")
+            setActiveRequestTab(tab as "params" | "headers" | "body" | "auth")
           }
           className="flex h-full min-h-0 flex-col gap-3"
         >
@@ -37,6 +39,7 @@ export function RequestPanel() {
             <TabsTrigger value="params">Params</TabsTrigger>
             <TabsTrigger value="headers">Headers</TabsTrigger>
             <TabsTrigger value="body">Body</TabsTrigger>
+            <TabsTrigger value="auth">Auth</TabsTrigger>
           </TabsList>
 
           <TabsContent value="params" className="min-h-0 flex-1 overflow-auto">
@@ -44,11 +47,24 @@ export function RequestPanel() {
           </TabsContent>
 
           <TabsContent value="headers" className="min-h-0 flex-1 overflow-auto">
-            <HeadersEditor />
+            <div className="flex h-full flex-col gap-3">
+              {authType !== "none" ? (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  Authorization header is managed by the Auth tab.
+                </div>
+              ) : null}
+              <div className="min-h-0 flex-1 overflow-auto">
+                <HeadersEditor />
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="body" className="min-h-0 flex-1 overflow-auto">
             <BodyEditor />
+          </TabsContent>
+
+          <TabsContent value="auth" className="min-h-0 flex-1 overflow-auto">
+            <AuthEditor />
           </TabsContent>
         </Tabs>
       </div>

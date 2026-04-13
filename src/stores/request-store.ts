@@ -26,7 +26,8 @@ export interface MultipartField extends ApiMultipartField {
 }
 
 export type BodyType = "none" | "json" | "form-urlencoded" | "form-data" | "raw";
-export type RequestTab = "params" | "headers" | "body";
+export type AuthType = "none" | "bearer" | "basic";
+export type RequestTab = "params" | "headers" | "body" | "auth";
 export type ResponseTab = "body" | "headers";
 
 export interface Tab {
@@ -45,6 +46,10 @@ export interface Tab {
   bodyFormData: KeyValue[];
   multipartFields: MultipartField[];
   rawContentType: string;
+  authType: AuthType;
+  authBearer: string;
+  authBasicUsername: string;
+  authBasicPassword: string;
   response: HttpResponseData | null;
   isLoading: boolean;
   error: string | null;
@@ -68,6 +73,10 @@ interface RequestStore {
   setBodyFormData: (data: KeyValue[]) => void;
   setMultipartFields: (fields: MultipartField[]) => void;
   setRawContentType: (contentType: string) => void;
+  setAuthType: (authType: AuthType) => void;
+  setAuthBearer: (authBearer: string) => void;
+  setAuthBasicUsername: (authBasicUsername: string) => void;
+  setAuthBasicPassword: (authBasicPassword: string) => void;
   setResponse: (response: HttpResponseData | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -139,6 +148,35 @@ const toApiKeyValue = ({ key, value, enabled }: KeyValue): ApiKeyValue => ({
   value,
   enabled,
 });
+
+export const encodeBase64Utf8 = (value: string): string => {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary);
+};
+
+export const getAuthorizationHeaderValue = (
+  authType: AuthType,
+  authBearer: string,
+  authBasicUsername: string,
+  authBasicPassword: string,
+): string | null => {
+  if (authType === "bearer") {
+    const token = authBearer.trim();
+    return token ? `Bearer ${token}` : null;
+  }
+
+  if (authType === "basic") {
+    return `Basic ${encodeBase64Utf8(`${authBasicUsername}:${authBasicPassword}`)}`;
+  }
+
+  return null;
+};
 
 const toApiMultipartField = ({
   key,
@@ -255,6 +293,40 @@ const getErrorMessage = (error: unknown): string => {
   return "Failed to send request";
 };
 
+const getRequestHeaders = (tab: Tab): ApiKeyValue[] => {
+  const filteredHeaders = tab.headers.filter((header) => {
+    if (!header.enabled) {
+      return false;
+    }
+
+    if (tab.authType !== "none" && header.key.trim().toLowerCase() === "authorization") {
+      return false;
+    }
+
+    return true;
+  });
+
+  const authHeaderValue = getAuthorizationHeaderValue(
+    tab.authType,
+    tab.authBearer,
+    tab.authBasicUsername,
+    tab.authBasicPassword,
+  );
+
+  if (!authHeaderValue) {
+    return filteredHeaders.map(toApiKeyValue);
+  }
+
+  return [
+    ...filteredHeaders.map(toApiKeyValue),
+    {
+      key: "Authorization",
+      value: authHeaderValue,
+      enabled: true,
+    },
+  ];
+};
+
 const getBaseUrl = (url: string): string => {
   try {
     const parsedUrl = new URL(url);
@@ -312,6 +384,10 @@ const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => ({
   bodyFormData: [],
   multipartFields: [],
   rawContentType: "text/plain",
+  authType: "none",
+  authBearer: "",
+  authBasicUsername: "",
+  authBasicPassword: "",
   response: null,
   isLoading: false,
   error: null,
@@ -589,6 +665,12 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     get().updateActiveTab({ multipartFields, isDirty: true }),
   setRawContentType: (rawContentType) =>
     get().updateActiveTab({ rawContentType, isDirty: true }),
+  setAuthType: (authType) => get().updateActiveTab({ authType, isDirty: true }),
+  setAuthBearer: (authBearer) => get().updateActiveTab({ authBearer, isDirty: true }),
+  setAuthBasicUsername: (authBasicUsername) =>
+    get().updateActiveTab({ authBasicUsername, isDirty: true }),
+  setAuthBasicPassword: (authBasicPassword) =>
+    get().updateActiveTab({ authBasicPassword, isDirty: true }),
   setResponse: (response) => get().updateActiveTab({ response }),
   setLoading: (isLoading) => get().updateActiveTab({ isLoading }),
   setError: (error) => get().updateActiveTab({ error }),
@@ -754,7 +836,7 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     const payload: HttpRequestData = {
       method: tab.method,
       url: getBaseUrl(tab.url),
-      headers: tab.headers.filter((header) => header.enabled).map(toApiKeyValue),
+      headers: getRequestHeaders(tab),
       query_params: tab.queryParams
         .filter((param) => param.enabled)
         .map(toApiKeyValue),
