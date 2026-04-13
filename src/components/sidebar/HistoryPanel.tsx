@@ -137,6 +137,7 @@ const toResponse = (entry: HistoryEntry): HttpResponseData | null => {
       )?.value ?? "",
     size_bytes: entry.size_bytes ?? 0,
     time_ms: entry.time_ms ?? 0,
+    is_truncated: false,
   };
 };
 

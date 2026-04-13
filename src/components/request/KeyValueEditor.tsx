@@ -1,9 +1,10 @@
+import { useCallback } from "react";
 import { IconX } from "@tabler/icons-react";
 
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
-import type { KeyValue } from "~/stores/request-store";
+import { createEmptyKeyValue, type KeyValue } from "~/stores/request-store";
 
 interface KeyValueEditorProps {
   items: KeyValue[];
@@ -12,24 +13,17 @@ interface KeyValueEditorProps {
   valuePlaceholder?: string;
 }
 
-const createEmptyRow = (): KeyValue => ({
-  key: "",
-  value: "",
-  enabled: true,
-  id: crypto.randomUUID(),
-});
-
 const isEmptyRow = (item: KeyValue): boolean =>
   !item.key.trim() && !item.value.trim();
 
 const ensureTrailingEmptyRow = (items: KeyValue[]): KeyValue[] => {
   if (items.length === 0) {
-    return [createEmptyRow()];
+    return [createEmptyKeyValue()];
   }
 
   const lastRow = items[items.length - 1];
   if (!isEmptyRow(lastRow)) {
-    return [...items, createEmptyRow()];
+    return [...items, createEmptyKeyValue()];
   }
 
   return items;
@@ -41,24 +35,24 @@ export function KeyValueEditor({
   keyPlaceholder = "Key",
   valuePlaceholder = "Value",
 }: KeyValueEditorProps) {
-  const rows = items.length > 0 ? items : [createEmptyRow()];
+  const rows = items.length > 0 ? items : [createEmptyKeyValue()];
 
-  const updateRow = (rowId: string, patch: Partial<KeyValue>) => {
+  const updateRow = useCallback((rowId: string, patch: Partial<KeyValue>) => {
     const nextRows = rows.map((row) =>
       row.id === rowId ? { ...row, ...patch } : row,
     );
     onChange(ensureTrailingEmptyRow(nextRows));
-  };
+  }, [onChange, rows]);
 
-  const deleteRow = (rowId: string) => {
+  const deleteRow = useCallback((rowId: string) => {
     if (rows.length <= 1) {
-      onChange([createEmptyRow()]);
+      onChange([createEmptyKeyValue()]);
       return;
     }
 
     const nextRows = rows.filter((row) => row.id !== rowId);
     onChange(ensureTrailingEmptyRow(nextRows));
-  };
+  }, [onChange, rows]);
 
   return (
     <div className="h-full overflow-auto rounded-md border border-border">

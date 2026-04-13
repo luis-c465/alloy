@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 
@@ -15,10 +15,10 @@ export function UrlBar() {
   const sendRequest = useRequestStore((state) => state.sendRequest);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleChange = (value: string) => {
+  const handleChange = useCallback((value: string) => {
     setUrl(value);
     syncUrlToQueryParams();
-  };
+  }, [setUrl, syncUrlToQueryParams]);
 
   useHotkey(
     "Enter",

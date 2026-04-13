@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { ErrorBoundary } from "~/components/ErrorBoundary";
 import App from "~/App";
 import { queryClient } from "~/lib/query";
 import "~/index.css";
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <HotkeysProvider defaultOptions={{ hotkey: { preventDefault: true } }}>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </HotkeysProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

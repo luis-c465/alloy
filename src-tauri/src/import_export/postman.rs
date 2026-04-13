@@ -17,6 +17,14 @@ use crate::{
 };
 
 const MAX_DIRECTORY_DEPTH: usize = 10;
+
+/// Result of importing a Postman collection, including any non-fatal warnings
+/// about skipped features (e.g. file upload fields).
+#[taurpc::ipc_type]
+pub struct ImportResult {
+    pub created_files: Vec<String>,
+    pub warnings: Vec<String>,
+}
 const MAX_NAME_LENGTH: usize = 200;
 const DEFAULT_MULTIPART_BOUNDARY: &str = "----AlloyPostmanImportBoundary";
 
@@ -197,8 +205,10 @@ pub fn parse_postman_collection(json: &str) -> Result<PostmanCollection, AppErro
 
     if let Some(schema) = collection.info.schema.as_deref() {
         let normalized = schema.to_ascii_lowercase();
-        let supported = normalized.contains("/v2.1.0/") || normalized.contains("/v2.0.0/");
-        if !supported {
+        // Accept any v2.x Postman collection schema rather than pinning to
+        // specific minor versions.  This prevents future Postman exports
+        // (e.g. v2.2.0) from being rejected outright.
+        if !normalized.contains("postman.com/json/collection/v2") {
             return Err(AppError::ParseError(format!(
                 "Unsupported Postman collection schema: {schema}"
             )));
@@ -211,7 +221,7 @@ pub fn parse_postman_collection(json: &str) -> Result<PostmanCollection, AppErro
 pub fn postman_to_workspace(
     collection: &PostmanCollection,
     workspace_path: &Path,
-) -> Result<Vec<String>, AppError> {
+) -> Result<ImportResult, AppError> {
     if !workspace_path.exists() {
         return Err(AppError::IoError(format!(
             "Workspace path does not exist: {}",
@@ -227,15 +237,20 @@ pub fn postman_to_workspace(
     }
 
     let mut created_paths = Vec::new();
+    let mut warnings = Vec::new();
     import_items(
         &collection.item,
         workspace_path,
         0,
         collection.auth.as_ref(),
         &mut created_paths,
+        &mut warnings,
     )?;
 
-    Ok(created_paths)
+    Ok(ImportResult {
+        created_files: created_paths,
+        warnings,
+    })
 }
 
 fn import_items(
@@ -244,6 +259,7 @@ fn import_items(
     depth: usize,
     inherited_auth: Option<&PostmanAuth>,
     created_paths: &mut Vec<String>,
+    warnings: &mut Vec<String>,
 ) -> Result<(), AppError> {
     if depth >= MAX_DIRECTORY_DEPTH {
         return Err(AppError::ParseError(format!(
@@ -273,16 +289,17 @@ fn import_items(
                 depth + 1,
                 scoped_auth,
                 created_paths,
+                warnings,
             )?;
 
             continue;
         }
 
         let Some(request) = item.request.as_ref() else {
-            eprintln!(
-                "Skipping Postman item '{}' because it does not contain a request.",
+            warnings.push(format!(
+                "'{}': skipped — item does not contain a request",
                 item.name
-            );
+            ));
             continue;
         };
 
@@ -293,7 +310,7 @@ fn import_items(
             Some("http"),
         );
         let file_path = parent_path.join(format!("{file_stem}.http"));
-        let request_data = postman_item_to_http_request(item, request, scoped_auth)?;
+        let request_data = postman_item_to_http_request(item, request, scoped_auth, warnings)?;
         let http_file = HttpFileData {
             path: file_path.to_string_lossy().into_owned(),
             requests: vec![request_data],
@@ -311,8 +328,9 @@ fn postman_item_to_http_request(
     item: &PostmanItem,
     request: &PostmanRequest,
     inherited_auth: Option<&PostmanAuth>,
+    warnings: &mut Vec<String>,
 ) -> Result<HttpFileRequest, AppError> {
-    let mut normalized = normalize_request(request, &item.name)?;
+    let mut normalized = normalize_request(request, &item.name, warnings)?;
     let request_auth = match request {
         PostmanRequest::Detailed(details) => scoped_auth(details.auth.as_ref(), inherited_auth),
         PostmanRequest::RawUrl(_) => inherited_auth,
@@ -342,6 +360,7 @@ struct NormalizedRequest {
 fn normalize_request(
     request: &PostmanRequest,
     request_name: &str,
+    warnings: &mut Vec<String>,
 ) -> Result<NormalizedRequest, AppError> {
     match request {
         PostmanRequest::RawUrl(url) => Ok(NormalizedRequest {
@@ -370,7 +389,8 @@ fn normalize_request(
                 })
                 .collect::<Vec<_>>();
 
-            let normalized_body = normalize_body(request.body.as_ref(), &mut headers);
+            let normalized_body =
+                normalize_body(request.body.as_ref(), &mut headers, request_name, warnings);
 
             Ok(NormalizedRequest {
                 method: if method.is_empty() {
@@ -392,7 +412,12 @@ struct NormalizedBody {
     body_type: String,
 }
 
-fn normalize_body(body: Option<&PostmanBody>, headers: &mut Vec<KeyValue>) -> NormalizedBody {
+fn normalize_body(
+    body: Option<&PostmanBody>,
+    headers: &mut Vec<KeyValue>,
+    request_name: &str,
+    warnings: &mut Vec<String>,
+) -> NormalizedBody {
     let Some(body) = body else {
         return NormalizedBody {
             body: None,
@@ -410,12 +435,17 @@ fn normalize_body(body: Option<&PostmanBody>, headers: &mut Vec<KeyValue>) -> No
     match body.mode.as_deref().unwrap_or("raw") {
         "raw" => normalize_raw_body(body, headers),
         "urlencoded" => normalize_urlencoded_body(body, headers),
-        "formdata" => normalize_formdata_body(body, headers),
+        "formdata" => normalize_formdata_body(body, headers, request_name, warnings),
         "file" => {
-            eprintln!(
-                "Skipping unsupported Postman file body reference: {:?}",
-                body.file.as_ref().and_then(|file| file.src.as_deref())
-            );
+            let src = body
+                .file
+                .as_ref()
+                .and_then(|file| file.src.as_deref())
+                .unwrap_or("<unknown>");
+            warnings.push(format!(
+                "'{request_name}': file body reference skipped ({src}) \
+                 — file uploads must be re-configured manually"
+            ));
             NormalizedBody {
                 body: None,
                 body_type: "none".to_string(),
@@ -471,7 +501,12 @@ fn normalize_urlencoded_body(body: &PostmanBody, headers: &mut Vec<KeyValue>) ->
     }
 }
 
-fn normalize_formdata_body(body: &PostmanBody, headers: &mut Vec<KeyValue>) -> NormalizedBody {
+fn normalize_formdata_body(
+    body: &PostmanBody,
+    headers: &mut Vec<KeyValue>,
+    request_name: &str,
+    warnings: &mut Vec<String>,
+) -> NormalizedBody {
     let mut lines = Vec::new();
     let mut skipped_file_fields = Vec::new();
 
@@ -500,10 +535,11 @@ fn normalize_formdata_body(body: &PostmanBody, headers: &mut Vec<KeyValue>) -> N
     }
 
     if !skipped_file_fields.is_empty() {
-        eprintln!(
-            "Skipped unsupported Postman multipart file fields: {}",
+        warnings.push(format!(
+            "'{request_name}': multipart file fields skipped ({}) \
+             — file uploads must be re-configured manually",
             skipped_file_fields.join(", ")
-        );
+        ));
     }
 
     if lines.is_empty() {
@@ -891,9 +927,9 @@ mod tests {
         )
         .unwrap();
 
-        let created = postman_to_workspace(&collection, &workspace).unwrap();
+        let result = postman_to_workspace(&collection, &workspace).unwrap();
 
-        assert_eq!(created.len(), 2);
+        assert_eq!(result.created_files.len(), 2);
         let nested_file = workspace.join("Users").join("Get Users.http");
         let top_level_file = workspace.join("Create User.http");
         assert!(nested_file.exists());
@@ -952,6 +988,29 @@ mod tests {
 
         let content = std::fs::read_to_string(workspace.join("Bearer Auth.http")).unwrap();
         assert!(content.contains("Authorization: Bearer {{token}}"));
+    }
+
+    #[test]
+    fn postman_import_accepts_v2_schema_variants() {
+        // Future v2.2.0 schema should be accepted.
+        let json = r#"{
+            "info": {
+                "name": "Test",
+                "schema": "https://schema.getpostman.com/json/collection/v2.2.0/collection.json"
+            },
+            "item": []
+        }"#;
+        assert!(parse_postman_collection(json).is_ok());
+
+        // v1.0.0 should be rejected.
+        let json_v1 = r#"{
+            "info": {
+                "name": "Test",
+                "schema": "https://schema.getpostman.com/json/collection/v1.0.0/collection.json"
+            },
+            "item": []
+        }"#;
+        assert!(parse_postman_collection(json_v1).is_err());
     }
 
     fn temp_workspace(label: &str) -> std::path::PathBuf {

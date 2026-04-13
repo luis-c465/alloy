@@ -1,12 +1,11 @@
 import { json } from "@codemirror/lang-json";
 import { html } from "@codemirror/lang-html";
 import { xml } from "@codemirror/lang-xml";
-import { oneDark } from "@codemirror/theme-one-dark";
-import CodeMirror from "@uiw/react-codemirror";
 import { useCallback, useMemo } from "react";
 
 import { KeyValueEditor } from "~/components/request/KeyValueEditor";
 import { MultipartEditor } from "~/components/request/MultipartEditor";
+import { CodeEditor } from "~/components/ui/CodeEditor";
 import {
   Select,
   SelectContent,
@@ -17,7 +16,6 @@ import {
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { cn } from "~/lib/utils";
 import { useRequestStore } from "~/stores/request-store";
-import { useThemeStore } from "~/stores/theme-store";
 
 const BODY_TYPE_OPTIONS = [
   { value: "none", label: "None" },
@@ -43,7 +41,6 @@ export function BodyEditor() {
   const setBodyContent = useRequestStore((state) => state.setBodyContent);
   const setBodyFormData = useRequestStore((state) => state.setBodyFormData);
   const setRawContentType = useRequestStore((state) => state.setRawContentType);
-  const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
 
   const rawNormalized = useMemo(() => {
     return RAW_TYPE_OPTIONS.some((option) => option.value === rawContentType)
@@ -132,39 +129,25 @@ export function BodyEditor() {
       ) : null}
 
       {bodyType === "json" ? (
-        <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border">
-          <CodeMirror
-            value={bodyContent}
-            onChange={handleBodyChange}
-            extensions={jsonExtensions}
-            height="100%"
-            minHeight="100px"
-            basicSetup={{
-              lineNumbers: true,
-              foldGutter: true,
-              autocompletion: true,
-            }}
-            theme={resolvedTheme === "dark" ? oneDark : "light"}
-          />
-        </div>
+        <CodeEditor
+          value={bodyContent}
+          onChange={handleBodyChange}
+          extensions={jsonExtensions}
+          minHeight="100px"
+          autocompletion
+          className="min-h-0 flex-1 overflow-hidden"
+        />
       ) : null}
 
       {bodyType === "raw" ? (
-        <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border">
-          <CodeMirror
-            value={bodyContent}
-            onChange={handleBodyChange}
-            extensions={rawExtensions}
-            height="100%"
-            minHeight="100px"
-            basicSetup={{
-              lineNumbers: true,
-              foldGutter: true,
-              autocompletion: true,
-            }}
-            theme={resolvedTheme === "dark" ? oneDark : "light"}
-          />
-        </div>
+        <CodeEditor
+          value={bodyContent}
+          onChange={handleBodyChange}
+          extensions={rawExtensions}
+          minHeight="100px"
+          autocompletion
+          className="min-h-0 flex-1 overflow-hidden"
+        />
       ) : null}
     </div>
   );

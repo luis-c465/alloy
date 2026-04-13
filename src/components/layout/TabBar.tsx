@@ -33,6 +33,12 @@ export function TabBar() {
       ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }, [activeTabId]);
 
+  useEffect(() => {
+    return () => {
+      tabButtonRefs.current.clear();
+    };
+  }, []);
+
   return (
     <div className="flex h-10 shrink-0 items-center border-b border-border bg-background/95 pl-2">
       <div className="flex min-w-0 flex-1 flex-nowrap items-stretch gap-1 overflow-x-auto pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -61,12 +67,12 @@ export function TabBar() {
                 }}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                 onMouseDown={(event) => {
-                   if (event.button === 1) {
-                     event.preventDefault();
-                     void closeTab(tab.id);
-                   }
-                 }}
+                onMouseDown={(event) => {
+                  if (event.button === 1) {
+                    event.preventDefault();
+                    void closeTab(tab.id);
+                  }
+                }}
                 className="flex min-w-0 flex-1 items-center gap-2 pl-2 text-xs"
               >
                 <span

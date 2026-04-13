@@ -1,7 +1,7 @@
-use std::path::Path;
+use std::{path::Path, time::Duration};
 
 use rusqlite::{params, params_from_iter, types::Value, Connection};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 use crate::{
     error::AppError,
@@ -10,6 +10,7 @@ use crate::{
 
 const MAX_RESPONSE_BODY_BYTES: usize = 1024 * 1024;
 const TRUNCATED_MARKER: &str = "\n[TRUNCATED]";
+const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct HistoryDb {
     pub conn: Mutex<Connection>,
@@ -51,13 +52,26 @@ impl HistoryDb {
         })
     }
 
+    /// Acquire the database connection with a timeout to prevent deadlocks
+    /// if a previous lock holder panicked.
+    async fn acquire_conn(&self) -> Result<MutexGuard<'_, Connection>, AppError> {
+        tokio::time::timeout(DB_LOCK_TIMEOUT, self.conn.lock())
+            .await
+            .map_err(|_| {
+                AppError::RequestError(
+                    "History database lock timed out — the database may be in a bad state"
+                        .to_string(),
+                )
+            })
+    }
+
     pub async fn insert(&self, entry: &HistoryEntry) -> Result<i64, AppError> {
         let response_body = entry
             .response_body
             .as_deref()
             .map(truncate_large_response_body);
 
-        let conn = self.conn.lock().await;
+        let conn = self.acquire_conn().await?;
         conn.execute(
             "
             INSERT INTO history (
@@ -151,7 +165,7 @@ impl HistoryDb {
         };
         bind_values.push(Value::Integer(limit));
 
-        let conn = self.conn.lock().await;
+        let conn = self.acquire_conn().await?;
         let mut statement = conn.prepare(&sql).map_err(|error| {
             AppError::RequestError(format!("Failed to prepare history list query: {error}"))
         })?;
@@ -180,7 +194,7 @@ impl HistoryDb {
     }
 
     pub async fn get(&self, id: i64) -> Result<Option<HistoryEntry>, AppError> {
-        let conn = self.conn.lock().await;
+        let conn = self.acquire_conn().await?;
         let mut statement = conn
             .prepare(
                 "
@@ -225,7 +239,7 @@ impl HistoryDb {
     }
 
     pub async fn delete(&self, id: i64) -> Result<(), AppError> {
-        let conn = self.conn.lock().await;
+        let conn = self.acquire_conn().await?;
         conn.execute("DELETE FROM history WHERE id = ?", [id])
             .map_err(|error| {
                 AppError::RequestError(format!("Failed to delete history entry {id}: {error}"))
@@ -234,14 +248,14 @@ impl HistoryDb {
     }
 
     pub async fn clear(&self) -> Result<(), AppError> {
-        let conn = self.conn.lock().await;
+        let conn = self.acquire_conn().await?;
         conn.execute("DELETE FROM history", [])
             .map_err(|error| AppError::RequestError(format!("Failed to clear history: {error}")))?;
         Ok(())
     }
 
     pub async fn delete_older_than_days(&self, days: u32) -> Result<u64, AppError> {
-        let conn = self.conn.lock().await;
+        let conn = self.acquire_conn().await?;
         let removed = conn
             .execute(
                 "DELETE FROM history WHERE timestamp < datetime('now', '-' || ? || ' days')",

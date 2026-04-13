@@ -3,20 +3,33 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use toml::Value;
 
 use crate::{
-    environment::types::EnvironmentData, error::AppError, http::types::KeyValue,
-    workspace::fs::ensure_alloy_dir,
+    environment::types::EnvironmentData,
+    error::AppError,
+    http::types::KeyValue,
+    workspace::fs::{atomic_write, ensure_alloy_dir},
 };
 
 const ENVIRONMENTS_DIR: &str = "environments";
 const CONFIG_FILE: &str = "config.toml";
 
+#[derive(Serialize, Deserialize)]
+struct EnvironmentVariableToml {
+    value: String,
+    #[serde(default = "default_enabled")]
+    enabled: bool,
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
 #[derive(Serialize)]
 struct EnvironmentToml {
-    variables: BTreeMap<String, String>,
+    variables: BTreeMap<String, EnvironmentVariableToml>,
 }
 
 #[derive(Serialize)]
@@ -71,13 +84,19 @@ pub async fn write_environment(
 
     let mut variables = BTreeMap::new();
     for variable in &env.variables {
-        variables.insert(variable.key.clone(), variable.value.clone());
+        variables.insert(
+            variable.key.clone(),
+            EnvironmentVariableToml {
+                value: variable.value.clone(),
+                enabled: variable.enabled,
+            },
+        );
     }
 
     let content = toml::to_string_pretty(&EnvironmentToml { variables })
         .map_err(|error| AppError::SerializationError(error.to_string()))?;
 
-    tokio::fs::write(file_path, content).await?;
+    atomic_write(&file_path, content.as_bytes()).await?;
     Ok(())
 }
 
@@ -127,7 +146,7 @@ pub async fn write_active_environment(
     })
     .map_err(|error| AppError::SerializationError(error.to_string()))?;
 
-    tokio::fs::write(config_path, content).await?;
+    atomic_write(&config_path, content.as_bytes()).await?;
     Ok(())
 }
 
@@ -148,17 +167,40 @@ async fn read_environment_file(path: &Path, name: String) -> Result<EnvironmentD
         .unwrap_or_default();
 
     for (key, value) in variable_table {
-        let value = toml_value_to_string(&value).map_err(|message| {
-            AppError::ParseError(format!(
-                "Invalid variable value for '{key}' in {}: {message}",
-                path.display()
-            ))
-        })?;
+        // New format: inline table with `value` and `enabled` fields.
+        // Old format (backward compat): plain scalar string.
+        let (var_value, enabled) = if let Some(table) = value.as_table() {
+            let v = table
+                .get("value")
+                .map(|v| toml_value_to_string(v))
+                .transpose()
+                .map_err(|message| {
+                    AppError::ParseError(format!(
+                        "Invalid variable value for '{key}' in {}: {message}",
+                        path.display()
+                    ))
+                })?
+                .unwrap_or_default();
+            let e = table
+                .get("enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(true);
+            (v, e)
+        } else {
+            // Legacy plain scalar format — treat as enabled.
+            let v = toml_value_to_string(&value).map_err(|message| {
+                AppError::ParseError(format!(
+                    "Invalid variable value for '{key}' in {}: {message}",
+                    path.display()
+                ))
+            })?;
+            (v, true)
+        };
 
         variables.push(KeyValue {
             key,
-            value,
-            enabled: true,
+            value: var_value,
+            enabled,
         });
     }
 
@@ -240,11 +282,13 @@ mod tests {
         assert!(loaded
             .variables
             .iter()
-            .any(|kv| kv.key == "base_url" && kv.value == "http://localhost:3000"));
+            .any(|kv| kv.key == "base_url"
+                && kv.value == "http://localhost:3000"
+                && kv.enabled));
         assert!(loaded
             .variables
             .iter()
-            .any(|kv| kv.key == "api_key" && kv.value == "dev-key-123"));
+            .any(|kv| kv.key == "api_key" && kv.value == "dev-key-123" && kv.enabled));
 
         write_active_environment(&workspace, Some("Local Dev"))
             .await
@@ -255,6 +299,74 @@ mod tests {
         write_active_environment(&workspace, None).await.unwrap();
         let cleared = read_active_environment(&workspace).await.unwrap();
         assert_eq!(cleared, None);
+
+        tokio::fs::remove_dir_all(workspace).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn environment_toml_preserves_disabled_variables() {
+        let workspace =
+            std::env::temp_dir().join(format!("alloy-env-disabled-{}", Uuid::new_v4()));
+        tokio::fs::create_dir_all(&workspace).await.unwrap();
+
+        let env = EnvironmentData {
+            name: "staging".to_string(),
+            variables: vec![
+                KeyValue {
+                    key: "active_var".to_string(),
+                    value: "yes".to_string(),
+                    enabled: true,
+                },
+                KeyValue {
+                    key: "disabled_var".to_string(),
+                    value: "secret".to_string(),
+                    enabled: false,
+                },
+            ],
+        };
+
+        write_environment(&workspace, &env).await.unwrap();
+        let loaded = read_environment(&workspace, "staging").await.unwrap();
+
+        assert_eq!(loaded.variables.len(), 2);
+
+        let active = loaded
+            .variables
+            .iter()
+            .find(|kv| kv.key == "active_var")
+            .unwrap();
+        assert!(active.enabled);
+        assert_eq!(active.value, "yes");
+
+        let disabled = loaded
+            .variables
+            .iter()
+            .find(|kv| kv.key == "disabled_var")
+            .unwrap();
+        assert!(!disabled.enabled);
+        assert_eq!(disabled.value, "secret");
+
+        tokio::fs::remove_dir_all(workspace).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn environment_toml_reads_legacy_plain_string_format() {
+        let workspace =
+            std::env::temp_dir().join(format!("alloy-env-legacy-{}", Uuid::new_v4()));
+        let env_dir = workspace.join(".alloy").join("environments");
+        tokio::fs::create_dir_all(&env_dir).await.unwrap();
+
+        // Write a legacy-format TOML file (plain key = "value").
+        let legacy_content = "[variables]\nbase_url = \"http://localhost:3000\"\n";
+        tokio::fs::write(env_dir.join("legacy.toml"), legacy_content)
+            .await
+            .unwrap();
+
+        let loaded = read_environment(&workspace, "legacy").await.unwrap();
+        assert_eq!(loaded.variables.len(), 1);
+        assert_eq!(loaded.variables[0].key, "base_url");
+        assert_eq!(loaded.variables[0].value, "http://localhost:3000");
+        assert!(loaded.variables[0].enabled);
 
         tokio::fs::remove_dir_all(workspace).await.unwrap();
     }

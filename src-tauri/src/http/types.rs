@@ -58,4 +58,7 @@ pub struct HttpResponseData {
     pub content_type: String,
     pub size_bytes: u64,
     pub time_ms: u64,
+    /// True when the response body exceeded the maximum buffer size and was
+    /// truncated.  The `size_bytes` field still reflects the full size.
+    pub is_truncated: bool,
 }

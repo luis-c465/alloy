@@ -25,7 +25,9 @@ export type HttpFileRequest = { name: string | null; method: string; url: string
 
 export type HttpRequestData = { method: string; url: string; headers: KeyValue[]; query_params: KeyValue[]; body: RequestBody; timeout_ms: number | null; skip_ssl_verification: boolean }
 
-export type HttpResponseData = { status: number; status_text: string; headers: KeyValue[]; body: string; is_binary: boolean; body_base64: string | null; content_type: string; size_bytes: number; time_ms: number }
+export type HttpResponseData = { status: number; status_text: string; headers: KeyValue[]; body: string; is_binary: boolean; body_base64: string | null; content_type: string; size_bytes: number; time_ms: number; is_truncated: boolean }
+
+export type ImportResult = { created_files: string[]; warnings: string[] }
 
 export type KeyValue = { key: string; value: string; enabled: boolean }
 
@@ -53,7 +55,7 @@ get_history_entry: (id: number) => Promise<HistoryEntry | null>,
 list_history: (filter: HistoryFilter) => Promise<HistoryListEntry[]>},
 "import_export": {export_curl: (request: HttpRequestData) => Promise<string>, 
 import_curl: (curlCommand: string) => Promise<HttpRequestData>, 
-import_postman_collection: (jsonContent: string, workspacePath: string) => Promise<string[]>, 
+import_postman_collection: (jsonContent: string, workspacePath: string) => Promise<ImportResult>, 
 pick_import_file: () => Promise<string | null>},
 "workspace": {create_directory: (parentPath: string, dirName: string) => Promise<string>, 
 create_http_file: (dirPath: string, fileName: string) => Promise<string>, 

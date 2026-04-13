@@ -2,30 +2,16 @@ import { json } from "@codemirror/lang-json";
 import { html } from "@codemirror/lang-html";
 import { search, searchKeymap } from "@codemirror/search";
 import { xml } from "@codemirror/lang-xml";
-import { oneDark } from "@codemirror/theme-one-dark";
 import { keymap } from "@codemirror/view";
-import CodeMirror from "@uiw/react-codemirror";
 import { useEffect, useMemo, useState } from "react";
 
 import { BinaryPreview } from "~/components/response/BinaryPreview";
 import { JsonFilter } from "~/components/response/JsonFilter";
+import { CodeEditor } from "~/components/ui/CodeEditor";
 import { useActiveTabField } from "~/hooks/useActiveTab";
-import { useThemeStore } from "~/stores/theme-store";
+import { formatBytes } from "~/lib/format";
 
 const MAX_PREVIEW_BYTES = 1024 * 1024;
-
-const formatBytes = (bytes: number): string => {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-
-  const kb = bytes / 1024;
-  if (kb < 1024) {
-    return `${kb.toFixed(1)} KB`;
-  }
-
-  return `${(kb / 1024).toFixed(1)} MB`;
-};
 
 const getContentType = (
   contentType: string | undefined,
@@ -86,7 +72,6 @@ const getSuggestedFilename = (urlValue: string, contentType: string): string => 
 export function ResponseBody() {
   const response = useActiveTabField("response", null);
   const requestUrl = useActiveTabField("url", "");
-  const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const [displayBody, setDisplayBody] = useState("");
 
   const contentType = useMemo(
@@ -187,22 +172,14 @@ export function ResponseBody() {
         />
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border">
-        <CodeMirror
-          value={displayBody}
-          editable={false}
-          readOnly
-          extensions={extensions}
-          height="100%"
-          minHeight="100px"
-          basicSetup={{
-            lineNumbers: true,
-            foldGutter: true,
-            autocompletion: false,
-          }}
-          theme={resolvedTheme === "dark" ? oneDark : "light"}
-        />
-      </div>
+      <CodeEditor
+        value={displayBody}
+        editable={false}
+        readOnly
+        extensions={extensions}
+        minHeight="100px"
+        className="min-h-0 flex-1 overflow-hidden"
+      />
     </div>
   );
 }

@@ -1,3 +1,7 @@
+// Note: All `writeln!` / `write!` calls in this module target `String` via
+// `std::fmt::Write`.  The `fmt::Write` impl for `String` is **infallible** —
+// it can never return `Err` — so the `.unwrap()` calls below are
+// self-documenting no-ops, not runtime risks.
 use std::fmt::Write;
 
 use crate::workspace::types::{HttpFileData, HttpFileRequest};
@@ -10,7 +14,7 @@ pub fn serialize_http_file(data: &HttpFileData) -> String {
 
     if !data.variables.is_empty() {
         for variable in &data.variables {
-            let _ = writeln!(&mut output, "@{} = {}", variable.key, variable.value);
+            writeln!(&mut output, "@{} = {}", variable.key, variable.value).unwrap();
         }
         output.push('\n');
     }
@@ -34,7 +38,7 @@ fn write_request(output: &mut String, request: &HttpFileRequest) {
     output.push_str("###\n");
 
     if let Some(name) = &request.name {
-        let _ = writeln!(output, "# @name {name}");
+        writeln!(output, "# @name {name}").unwrap();
     }
 
     for (command, value) in &request.commands {
@@ -44,18 +48,18 @@ fn write_request(output: &mut String, request: &HttpFileRequest) {
 
         match value {
             Some(value) => {
-                let _ = writeln!(output, "# @{command} {value}");
+                writeln!(output, "# @{command} {value}").unwrap();
             }
             None => {
-                let _ = writeln!(output, "# @{command}");
+                writeln!(output, "# @{command}").unwrap();
             }
         }
     }
 
-    let _ = writeln!(output, "{} {} HTTP/1.1", request.method, request.url);
+    writeln!(output, "{} {} HTTP/1.1", request.method, request.url).unwrap();
 
     for header in &request.headers {
-        let _ = writeln!(output, "{}: {}", header.key, header.value);
+        writeln!(output, "{}: {}", header.key, header.value).unwrap();
     }
 
     output.push('\n');
@@ -67,7 +71,7 @@ fn write_request(output: &mut String, request: &HttpFileRequest) {
 
 fn write_body(output: &mut String, body: &str) {
     if let Some(filepath) = body.strip_prefix(FILE_BODY_PREFIX) {
-        let _ = writeln!(output, "< {filepath}");
+        writeln!(output, "< {filepath}").unwrap();
         return;
     }
 
@@ -80,7 +84,7 @@ fn write_body(output: &mut String, body: &str) {
             output.push('\n');
             output.push('\n');
         }
-        let _ = writeln!(output, ">> {filepath}");
+        writeln!(output, ">> {filepath}").unwrap();
         return;
     }
 

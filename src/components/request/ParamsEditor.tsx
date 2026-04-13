@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { KeyValueEditor } from "~/components/request/KeyValueEditor";
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { useRequestStore } from "~/stores/request-store";
@@ -9,10 +10,10 @@ export function ParamsEditor() {
     (state) => state.syncQueryParamsToUrl,
   );
 
-  const handleChange = (items: typeof queryParams) => {
+  const handleChange = useCallback((items: typeof queryParams) => {
     setQueryParams(items);
     syncQueryParamsToUrl();
-  };
+  }, [setQueryParams, syncQueryParamsToUrl]);
 
   return (
     <KeyValueEditor

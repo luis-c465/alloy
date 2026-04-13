@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 
 import { EnvironmentEditor } from "~/components/environment/EnvironmentEditor";
@@ -10,33 +10,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { listEnvironments, setActiveEnvironment as setActiveEnvironmentApi } from "~/lib/api";
+import { useEnvironments } from "~/hooks/useEnvironments";
+import { setActiveEnvironment as setActiveEnvironmentApi } from "~/lib/api";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
 export function EnvironmentSelector() {
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const environments = useWorkspaceStore((state) => state.environments);
   const activeEnvironment = useWorkspaceStore((state) => state.activeEnvironment);
-  const setEnvironments = useWorkspaceStore((state) => state.setEnvironments);
   const setActiveEnvironment = useWorkspaceStore((state) => state.setActiveEnvironment);
 
   const [editorOpen, setEditorOpen] = useState(false);
-
-  const refreshEnvironments = useCallback(async () => {
-    if (!workspacePath) {
-      setEnvironments([]);
-      setActiveEnvironment(null);
-      return;
-    }
-
-    const result = await listEnvironments(workspacePath);
-    setEnvironments(result.environments);
-    setActiveEnvironment(result.active);
-  }, [setActiveEnvironment, setEnvironments, workspacePath]);
-
-  useEffect(() => {
-    void refreshEnvironments();
-  }, [refreshEnvironments]);
+  const environmentsQuery = useEnvironments(workspacePath);
 
   const activeLabel = useMemo(() => {
     if (!workspacePath) {
@@ -119,7 +104,7 @@ export function EnvironmentSelector() {
         onOpenChange={(open) => {
           setEditorOpen(open);
           if (!open) {
-            void refreshEnvironments();
+            void environmentsQuery.refetch();
           }
         }}
       />

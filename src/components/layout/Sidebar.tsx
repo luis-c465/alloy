@@ -4,6 +4,7 @@ import { CollectionsPanel } from "~/components/sidebar/CollectionsPanel";
 import { HistoryPanel } from "~/components/sidebar/HistoryPanel";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { SIDEBAR_TABS, isSidebarTab } from "~/lib/constants";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
 export function Sidebar() {
@@ -16,25 +17,33 @@ export function Sidebar() {
         <Tabs
           value={activeTab}
           onValueChange={(value) => {
-            if (value === "collections" || value === "history") {
+            if (isSidebarTab(value)) {
               setActiveTab(value);
             }
           }}
         >
           <TabsList className="w-full justify-start" variant="line">
-            <TabsTrigger value="collections" className="max-w-8 flex-none px-2">
-              <IconFolder className="size-3.5" />
-              <span className="sr-only">Collections</span>
-            </TabsTrigger>
-
-            <TabsTrigger value="history" className="max-w-8 flex-none px-2">
-              <IconClock className="size-3.5" />
-              <span className="sr-only">History</span>
-            </TabsTrigger>
+            {SIDEBAR_TABS.map((tab) => (
+              <TabsTrigger
+                key={tab}
+                value={tab}
+                className="max-w-8 flex-none px-2"
+              >
+                {tab === "collections" ? (
+                  <IconFolder className="size-3.5" />
+                ) : (
+                  <IconClock className="size-3.5" />
+                )}
+                <span className="sr-only">
+                  {tab === "collections" ? "Collections" : "History"}
+                </span>
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <TabsContent value="collections" className="hidden" />
-          <TabsContent value="history" className="hidden" />
+          {SIDEBAR_TABS.map((tab) => (
+            <TabsContent key={tab} value={tab} className="hidden" />
+          ))}
         </Tabs>
       </div>
 

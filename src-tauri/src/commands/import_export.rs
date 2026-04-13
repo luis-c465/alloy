@@ -3,7 +3,7 @@ use crate::{
     http::types::HttpRequestData,
     import_export::{
         curl::{curl_to_request, request_to_curl},
-        postman::{parse_postman_collection, postman_to_workspace},
+        postman::{parse_postman_collection, postman_to_workspace, ImportResult},
     },
 };
 use tauri::AppHandle;
@@ -17,7 +17,7 @@ pub trait ImportExportApi {
     async fn import_postman_collection(
         json_content: String,
         workspace_path: String,
-    ) -> Result<Vec<String>, AppError>;
+    ) -> Result<ImportResult, AppError>;
     async fn pick_import_file() -> Result<Option<String>, AppError>;
 }
 
@@ -49,7 +49,7 @@ impl ImportExportApi for ImportExportApiImpl {
         self,
         json_content: String,
         workspace_path: String,
-    ) -> Result<Vec<String>, AppError> {
+    ) -> Result<ImportResult, AppError> {
         tokio::task::spawn_blocking(move || {
             let collection = parse_postman_collection(&json_content)?;
             postman_to_workspace(&collection, std::path::Path::new(&workspace_path))

@@ -1,5 +1,5 @@
 import { IconCheck, IconCopy } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "~/components/response/EmptyState";
 import { ResponseBody } from "~/components/response/ResponseBody";
@@ -8,6 +8,7 @@ import { ResponseHeaders } from "~/components/response/ResponseHeaders";
 import { StatusBar } from "~/components/response/StatusBar";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { isResponseTab } from "~/lib/constants";
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { useRequestStore } from "~/stores/request-store";
 
@@ -22,10 +23,12 @@ export function ResponsePanel() {
   const [copied, setCopied] = useState(false);
 
   const showEmptyState = !response && !isLoading && !error;
-  const headersCount = response?.headers.length ?? 0;
-  const cookiesCount =
-    response?.headers.filter((header) => header.key.trim().toLowerCase() === "set-cookie")
-      .length ?? 0;
+  const headersCount = useMemo(() => response?.headers.length ?? 0, [response?.headers]);
+  const cookiesCount = useMemo(
+    () => response?.headers.filter((header) => header.key.trim().toLowerCase() === "set-cookie")
+      .length ?? 0,
+    [response?.headers],
+  );
   const canCopyBody = Boolean(response?.body);
 
   useEffect(() => {
@@ -61,7 +64,7 @@ export function ResponsePanel() {
           <Tabs
             value={activeResponseTab}
             onValueChange={(tab) =>
-              setActiveResponseTab(tab as "body" | "headers" | "cookies")
+              isResponseTab(tab) && setActiveResponseTab(tab)
             }
             className="mt-3 flex min-h-0 flex-1 flex-col"
           >

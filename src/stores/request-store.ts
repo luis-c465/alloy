@@ -14,6 +14,11 @@ import {
   sendRequestWithEnv as sendRequestWithEnvApi,
   writeHttpFile,
 } from "~/lib/api";
+import {
+  DIRTY_TAB_DECISIONS,
+  REQUEST_TABS,
+  RESPONSE_TABS,
+} from "~/lib/constants";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
 export interface KeyValue extends ApiKeyValue {
@@ -27,8 +32,8 @@ export interface MultipartField extends ApiMultipartField {
 
 export type BodyType = "none" | "json" | "form-urlencoded" | "form-data" | "raw";
 export type AuthType = "none" | "bearer" | "basic";
-export type RequestTab = "params" | "headers" | "body" | "auth" | "options";
-export type ResponseTab = "body" | "headers" | "cookies";
+export type RequestTab = (typeof REQUEST_TABS)[number];
+export type ResponseTab = (typeof RESPONSE_TABS)[number];
 
 export interface Tab {
   id: string;
@@ -101,7 +106,7 @@ interface RequestStore {
   sendRequest: () => Promise<void>;
 }
 
-export type DirtyTabDecision = "save" | "discard" | "cancel";
+export type DirtyTabDecision = (typeof DIRTY_TAB_DECISIONS)[number];
 
 type DirtyTabPromptHandler = (tab: Tab) => Promise<DirtyTabDecision>;
 type SaveAsHandler = (tab: Tab) => Promise<string | null>;
@@ -131,7 +136,7 @@ export const registerSaveAsHandler = (handler: SaveAsHandler): (() => void) => {
   };
 };
 
-const createEmptyKeyValue = (): KeyValue => ({
+export const createEmptyKeyValue = (): KeyValue => ({
   key: "",
   value: "",
   enabled: true,
@@ -499,6 +504,10 @@ const updateTabById = (
   patch: Partial<Tab>,
 ): Tab[] => tabs.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab));
 
+const getTargetTabId = (tabs: Tab[], activeTabId: string | null): string | null => (
+  activeTabId ?? tabs[0]?.id ?? null
+);
+
 const removeTabById = (tabs: Tab[], tabId: string): Tab[] => (
   tabs.filter((tab) => tab.id !== tabId)
 );
@@ -553,7 +562,11 @@ const buildExistingFileSavePayload = async (
   tab: Tab,
   openTabs: Tab[],
 ): Promise<HttpFileData> => {
-  const currentFile = await readHttpFile(tab.filePath!);
+  if (!tab.filePath) {
+    throw new Error("Cannot save tab without a file path");
+  }
+
+  const currentFile = await readHttpFile(tab.filePath);
   const tabsByIndex = new Map<number, Tab>();
 
   for (const openTab of openTabs) {
@@ -696,7 +709,7 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
   },
   updateActiveTab: (patch) => {
     set((state) => {
-      const activeTabId = state.activeTabId ?? state.tabs[0]?.id ?? null;
+      const activeTabId = getTargetTabId(state.tabs, state.activeTabId);
       if (!activeTabId) {
         return state;
       }
@@ -781,7 +794,7 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
   },
   syncQueryParamsToUrl: () => {
     const { tabs, activeTabId } = get();
-    const targetTabId = activeTabId ?? tabs[0]?.id ?? null;
+    const targetTabId = getTargetTabId(tabs, activeTabId);
     if (!targetTabId) {
       return;
     }
@@ -821,7 +834,7 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
   },
   syncUrlToQueryParams: () => {
     const { tabs, activeTabId } = get();
-    const targetTabId = activeTabId ?? tabs[0]?.id ?? null;
+    const targetTabId = getTargetTabId(tabs, activeTabId);
     if (!targetTabId) {
       return;
     }
@@ -885,7 +898,7 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
   },
   sendRequest: async () => {
     const { tabs, activeTabId } = get();
-    const targetTabId = activeTabId ?? tabs[0]?.id ?? null;
+    const targetTabId = getTargetTabId(tabs, activeTabId);
     if (!targetTabId) {
       return;
     }

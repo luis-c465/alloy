@@ -14,10 +14,10 @@ import {
 } from "~/components/ui/dialog";
 import {
   deleteEnvironment,
-  listEnvironments,
   saveEnvironment,
   setActiveEnvironment as setActiveEnvironmentApi,
 } from "~/lib/api";
+import { useEnvironments } from "~/hooks/useEnvironments";
 import type { KeyValue } from "~/stores/request-store";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
@@ -54,8 +54,7 @@ export function EnvironmentEditor({
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const environments = useWorkspaceStore((state) => state.environments);
   const activeEnvironment = useWorkspaceStore((state) => state.activeEnvironment);
-  const setEnvironments = useWorkspaceStore((state) => state.setEnvironments);
-  const setActiveEnvironment = useWorkspaceStore((state) => state.setActiveEnvironment);
+  const environmentsQuery = useEnvironments(workspacePath);
 
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [draftVariables, setDraftVariables] = useState<KeyValue[]>([]);
@@ -80,19 +79,6 @@ export function EnvironmentEditor({
       environments.find((environment) => environment.name === preferredName) ?? null;
     setDraftVariables(toEditorVariables(preferredEnvironment?.variables ?? []));
   }, [activeEnvironment, environments, open, selectedName]);
-
-  const refreshEnvironments = async () => {
-    if (!workspacePath) {
-      setEnvironments([]);
-      setActiveEnvironment(null);
-      return null;
-    }
-
-    const result = await listEnvironments(workspacePath);
-    setEnvironments(result.environments);
-    setActiveEnvironment(result.active);
-    return result;
-  };
 
   const handleSelectEnvironment = (name: string) => {
     const nextEnvironment =
@@ -129,7 +115,7 @@ export function EnvironmentEditor({
     setIsSaving(true);
     try {
       await saveEnvironment(workspacePath, { name, variables: [] });
-      await refreshEnvironments();
+      await environmentsQuery.refetch();
       setSelectedName(name);
       setDraftVariables([]);
     } finally {
@@ -157,8 +143,8 @@ export function EnvironmentEditor({
         await setActiveEnvironmentApi(workspacePath, null);
       }
 
-      const refreshed = await refreshEnvironments();
-      const nextName = (refreshed?.environments ?? environments).find(
+      const refreshed = await environmentsQuery.refetch();
+      const nextName = (refreshed.data?.environments ?? environments).find(
         (environment) => environment.name !== selectedEnvironment.name,
       )?.name;
       setSelectedName(nextName ?? null);
@@ -178,7 +164,7 @@ export function EnvironmentEditor({
         name: selectedName,
         variables: toApiVariables(draftVariables),
       });
-      await refreshEnvironments();
+      await environmentsQuery.refetch();
     } finally {
       setIsSaving(false);
     }

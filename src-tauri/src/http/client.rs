@@ -16,6 +16,9 @@ use super::types::{
 
 const MULTIPART_MEMORY_WARNING_BYTES: u64 = 100 * 1024 * 1024;
 const MAX_BINARY_BASE64_BYTES: usize = 5 * 1024 * 1024;
+/// Maximum number of bytes we will buffer from a response body.
+/// Responses larger than this are truncated and flagged.
+const MAX_RESPONSE_BODY_BYTES: usize = 50 * 1024 * 1024; // 50 MB
 
 pub struct ExecutedResponse {
     pub response: HttpResponseData,
@@ -330,7 +333,7 @@ pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedRespons
     };
 
     let request_start = std::time::Instant::now();
-    let response = builder.send().await.map_err(map_reqwest_error)?;
+    let mut response = builder.send().await.map_err(map_reqwest_error)?;
     let elapsed_ms = request_start.elapsed().as_millis() as u64;
 
     let status = response.status();
@@ -356,17 +359,48 @@ pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedRespons
         .collect::<Vec<_>>();
 
     let content_length = response.content_length();
-    let bytes = response.bytes().await.map_err(map_reqwest_error)?;
-    let size_bytes = content_length.unwrap_or(bytes.len() as u64);
-    let is_binary = should_treat_as_binary(&content_type, &bytes);
 
-    let body_base64 = (is_binary && bytes.len() <= MAX_BINARY_BASE64_BYTES)
-        .then(|| BASE64_STANDARD.encode(&bytes));
+    // Stream the response body with a size cap to prevent OOM on huge
+    // responses.  If the known content_length already exceeds the cap we
+    // still stream up to the cap so the user sees a partial preview.
+    let mut buf: Vec<u8> = Vec::with_capacity(
+        content_length
+            .map(|cl| cl.min(MAX_RESPONSE_BODY_BYTES as u64) as usize)
+            .unwrap_or(8192),
+    );
+    let mut is_truncated = false;
+    let mut total_bytes: u64 = 0;
+
+    while let Some(chunk) = response.chunk().await.map_err(map_reqwest_error)? {
+        total_bytes += chunk.len() as u64;
+        let remaining = MAX_RESPONSE_BODY_BYTES.saturating_sub(buf.len());
+        if remaining == 0 {
+            is_truncated = true;
+            // Keep draining so we can report total size, but don't buffer.
+            continue;
+        }
+        if chunk.len() <= remaining {
+            buf.extend_from_slice(&chunk);
+        } else {
+            buf.extend_from_slice(&chunk[..remaining]);
+            is_truncated = true;
+        }
+    }
+
+    let size_bytes = content_length.unwrap_or(total_bytes);
+    let is_binary = should_treat_as_binary(&content_type, &buf);
+
+    let body_base64 = (is_binary && buf.len() <= MAX_BINARY_BASE64_BYTES)
+        .then(|| BASE64_STANDARD.encode(&buf));
 
     let body = if is_binary {
         String::new()
     } else {
-        String::from_utf8_lossy(&bytes).into_owned()
+        let mut text = String::from_utf8_lossy(&buf).into_owned();
+        if is_truncated {
+            text.push_str("\n\n[Response truncated — body exceeded 50 MB]");
+        }
+        text
     };
 
     Ok(ExecutedResponse {
@@ -380,8 +414,9 @@ pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedRespons
             content_type,
             size_bytes,
             time_ms: elapsed_ms,
+            is_truncated,
         },
-        binary_body: is_binary.then_some(bytes.to_vec()),
+        binary_body: is_binary.then(|| buf),
     })
 }
 

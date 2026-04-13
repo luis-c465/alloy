@@ -105,6 +105,8 @@ impl WorkspaceApi for WorkspaceApiImpl {
 
     async fn read_http_file(self, file_path: String) -> Result<HttpFileData, AppError> {
         let path = PathBuf::from(&file_path);
+        reject_path_traversal(&path)?;
+
         if !path.exists() || !path.is_file() {
             return Err(AppError::IoError(format!(
                 "File does not exist: {}",
@@ -122,6 +124,8 @@ impl WorkspaceApi for WorkspaceApiImpl {
         mut data: HttpFileData,
     ) -> Result<(), AppError> {
         let path = PathBuf::from(&file_path);
+        reject_path_traversal(&path)?;
+
         if let Some(parent) = path.parent() {
             if !parent.exists() {
                 return Err(AppError::IoError(format!(
@@ -133,7 +137,7 @@ impl WorkspaceApi for WorkspaceApiImpl {
 
         data.path = file_path;
         let content = serialize_http_file(&data);
-        tokio::fs::write(path, content).await?;
+        fs::atomic_write(&path, content.as_bytes()).await?;
         Ok(())
     }
 
@@ -143,6 +147,8 @@ impl WorkspaceApi for WorkspaceApiImpl {
         file_name: String,
     ) -> Result<String, AppError> {
         let dir = PathBuf::from(&dir_path);
+        reject_path_traversal(&dir)?;
+
         if !dir.exists() || !dir.is_dir() {
             return Err(AppError::IoError(format!(
                 "Directory does not exist: {}",
@@ -168,6 +174,8 @@ impl WorkspaceApi for WorkspaceApiImpl {
         dir_name: String,
     ) -> Result<String, AppError> {
         let parent = PathBuf::from(&parent_path);
+        reject_path_traversal(&parent)?;
+
         if !parent.exists() || !parent.is_dir() {
             return Err(AppError::IoError(format!(
                 "Parent directory does not exist: {}",
@@ -182,11 +190,17 @@ impl WorkspaceApi for WorkspaceApiImpl {
     }
 
     async fn delete_path(self, target_path: String) -> Result<(), AppError> {
-        fs::delete_path(Path::new(&target_path)).await
+        let path = PathBuf::from(&target_path);
+        reject_path_traversal(&path)?;
+        fs::delete_path(&path).await
     }
 
     async fn rename_path(self, from_path: String, to_path: String) -> Result<(), AppError> {
         let from = PathBuf::from(&from_path);
+        let to = PathBuf::from(&to_path);
+        reject_path_traversal(&from)?;
+        reject_path_traversal(&to)?;
+
         if !from.exists() {
             return Err(AppError::IoError(format!(
                 "Path does not exist: {}",
@@ -194,11 +208,10 @@ impl WorkspaceApi for WorkspaceApiImpl {
             )));
         }
 
-        fs::rename_path(Path::new(&from_path), Path::new(&to_path)).await?;
+        fs::rename_path(&from, &to).await?;
 
         // After renaming an HTTP/REST file, update any @name values that still
         // match the old file stem so they reflect the new filename.
-        let to = PathBuf::from(&to_path);
         if is_http_file(&to) {
             if let Err(e) = update_request_names_after_rename(&from, &to).await {
                 // Non-fatal: the rename already succeeded; just log the error.
@@ -232,7 +245,26 @@ fn validate_workspace_path(workspace_path: &str) -> Result<PathBuf, AppError> {
         )));
     }
 
-    Ok(path)
+    // Canonicalize to resolve symlinks and '..' segments.
+    std::fs::canonicalize(&path).map_err(|error| {
+        AppError::IoError(format!(
+            "Cannot resolve workspace path {}: {error}",
+            path.display()
+        ))
+    })
+}
+
+/// Reject paths that contain `..` segments, preventing directory traversal.
+fn reject_path_traversal(path: &Path) -> Result<(), AppError> {
+    for component in path.components() {
+        if let std::path::Component::ParentDir = component {
+            return Err(AppError::IoError(format!(
+                "Path contains disallowed '..' segment: {}",
+                path.display()
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn is_http_file(path: &Path) -> bool {
@@ -278,7 +310,7 @@ async fn update_request_names_after_rename(from: &Path, to: &Path) -> Result<(),
 
     if changed {
         let updated = serialize_http_file(&data);
-        tokio::fs::write(to, updated).await?;
+        fs::atomic_write(to, updated.as_bytes()).await?;
     }
 
     Ok(())

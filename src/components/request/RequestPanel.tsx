@@ -9,6 +9,7 @@ import { SendButton } from "~/components/request/SendButton";
 import { UrlBar } from "~/components/request/UrlBar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useActiveTabField } from "~/hooks/useActiveTab";
+import { isRequestTab } from "~/lib/constants";
 import { useRequestStore } from "~/stores/request-store";
 
 export function RequestPanel() {
@@ -35,9 +36,7 @@ export function RequestPanel() {
         <Tabs
           value={activeRequestTab}
           onValueChange={(tab) =>
-            setActiveRequestTab(
-              tab as "params" | "headers" | "body" | "auth" | "options",
-            )
+            isRequestTab(tab) && setActiveRequestTab(tab)
           }
           className="flex h-full min-h-0 flex-col gap-3"
         >

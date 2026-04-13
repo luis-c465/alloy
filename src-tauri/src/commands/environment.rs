@@ -125,5 +125,11 @@ fn validate_workspace_path(workspace_path: &str) -> Result<std::path::PathBuf, A
         )));
     }
 
-    Ok(path)
+    // Canonicalize to resolve symlinks and '..' segments.
+    std::fs::canonicalize(&path).map_err(|error| {
+        AppError::IoError(format!(
+            "Cannot resolve workspace path {}: {error}",
+            path.display()
+        ))
+    })
 }

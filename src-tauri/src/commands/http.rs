@@ -5,7 +5,7 @@ use crate::{
     http::{
         self,
         client::ExecutedResponse,
-        types::{HttpRequestData, HttpResponseData, KeyValue, MultipartField, RequestBody},
+        types::{HttpRequestData, HttpResponseData, KeyValue, RequestBody},
     },
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
@@ -126,7 +126,7 @@ impl Api for ApiImpl {
             .await?;
 
         let request_for_history = resolved_request;
-        let request_for_send = clone_request(&request_for_history);
+        let request_for_send = request_for_history.clone();
 
         let ExecutedResponse {
             response,
@@ -220,61 +220,4 @@ fn key_values_as_pairs(values: &[KeyValue]) -> Vec<String> {
         .collect()
 }
 
-fn clone_request(request: &HttpRequestData) -> HttpRequestData {
-    HttpRequestData {
-        method: request.method.clone(),
-        url: request.url.clone(),
-        headers: request
-            .headers
-            .iter()
-            .map(|item| KeyValue {
-                key: item.key.clone(),
-                value: item.value.clone(),
-                enabled: item.enabled,
-            })
-            .collect(),
-        query_params: request
-            .query_params
-            .iter()
-            .map(|item| KeyValue {
-                key: item.key.clone(),
-                value: item.value.clone(),
-                enabled: item.enabled,
-            })
-            .collect(),
-        body: match &request.body {
-            RequestBody::None => RequestBody::None,
-            RequestBody::Json(content) => RequestBody::Json(content.clone()),
-            RequestBody::FormUrlEncoded(values) => RequestBody::FormUrlEncoded(
-                values
-                    .iter()
-                    .map(|item| KeyValue {
-                        key: item.key.clone(),
-                        value: item.value.clone(),
-                        enabled: item.enabled,
-                    })
-                    .collect(),
-            ),
-            RequestBody::Multipart(fields) => RequestBody::Multipart(
-                fields
-                    .iter()
-                    .map(|field| MultipartField {
-                        key: field.key.clone(),
-                        value: field.value.clone(),
-                        content_type: field.content_type.clone(),
-                        enabled: field.enabled,
-                    })
-                    .collect(),
-            ),
-            RequestBody::Raw {
-                content,
-                content_type,
-            } => RequestBody::Raw {
-                content: content.clone(),
-                content_type: content_type.clone(),
-            },
-        },
-        timeout_ms: request.timeout_ms,
-        skip_ssl_verification: request.skip_ssl_verification,
-    }
-}
+

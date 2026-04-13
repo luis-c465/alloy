@@ -4,7 +4,7 @@ use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContex
 
 use crate::{
     error::AppError,
-    http::types::{HttpRequestData, KeyValue, RequestBody},
+    http::types::{HttpRequestData, KeyValue, MultipartField, MultipartValue, RequestBody},
 };
 
 pub fn create_resolver() -> Handlebars<'static> {
@@ -79,8 +79,12 @@ pub fn resolve_request(
             content_type: resolve_template(hbs, content_type, variables)?,
         },
         RequestBody::None => RequestBody::None,
-        RequestBody::FormUrlEncoded(data) => RequestBody::FormUrlEncoded(data.clone()),
-        RequestBody::Multipart(fields) => RequestBody::Multipart(fields.clone()),
+        RequestBody::FormUrlEncoded(data) => {
+            RequestBody::FormUrlEncoded(resolve_key_values(hbs, data, variables)?)
+        }
+        RequestBody::Multipart(fields) => {
+            RequestBody::Multipart(resolve_multipart_fields(hbs, fields, variables)?)
+        }
     };
 
     Ok(HttpRequestData {
@@ -92,6 +96,32 @@ pub fn resolve_request(
         timeout_ms: request.timeout_ms,
         skip_ssl_verification: request.skip_ssl_verification,
     })
+}
+
+fn resolve_multipart_fields(
+    hbs: &Handlebars,
+    fields: &[MultipartField],
+    variables: &HashMap<String, String>,
+) -> Result<Vec<MultipartField>, AppError> {
+    fields
+        .iter()
+        .map(|field| {
+            let key = resolve_template(hbs, &field.key, variables)?;
+            let value = match &field.value {
+                MultipartValue::Text(text) => {
+                    MultipartValue::Text(resolve_template(hbs, text, variables)?)
+                }
+                // File paths are literal filesystem references — don't resolve templates.
+                MultipartValue::File { .. } => field.value.clone(),
+            };
+            Ok(MultipartField {
+                key,
+                value,
+                content_type: field.content_type.clone(),
+                enabled: field.enabled,
+            })
+        })
+        .collect()
 }
 
 fn resolve_key_values(
@@ -177,6 +207,85 @@ mod tests {
         match resolved.body {
             RequestBody::Json(content) => assert_eq!(content, "{\"name\":\"Alloy\"}"),
             _ => panic!("expected JSON body"),
+        }
+    }
+
+    #[test]
+    fn resolve_request_resolves_form_urlencoded_body() {
+        let hbs = create_resolver();
+        let variables = HashMap::from([("token".to_string(), "secret123".to_string())]);
+
+        let request = HttpRequestData {
+            method: "POST".to_string(),
+            url: "https://example.com".to_string(),
+            headers: vec![],
+            query_params: vec![],
+            body: RequestBody::FormUrlEncoded(vec![KeyValue {
+                key: "api_key".to_string(),
+                value: "{{token}}".to_string(),
+                enabled: true,
+            }]),
+            timeout_ms: None,
+            skip_ssl_verification: false,
+        };
+
+        let resolved = resolve_request(&hbs, &request, &variables).unwrap();
+        match resolved.body {
+            RequestBody::FormUrlEncoded(data) => {
+                assert_eq!(data[0].value, "secret123");
+            }
+            _ => panic!("expected FormUrlEncoded body"),
+        }
+    }
+
+    #[test]
+    fn resolve_request_resolves_multipart_text_fields() {
+        let hbs = create_resolver();
+        let variables = HashMap::from([("greeting".to_string(), "hello world".to_string())]);
+
+        let request = HttpRequestData {
+            method: "POST".to_string(),
+            url: "https://example.com".to_string(),
+            headers: vec![],
+            query_params: vec![],
+            body: RequestBody::Multipart(vec![
+                MultipartField {
+                    key: "message".to_string(),
+                    value: MultipartValue::Text("{{greeting}}".to_string()),
+                    content_type: None,
+                    enabled: true,
+                },
+                MultipartField {
+                    key: "file".to_string(),
+                    value: MultipartValue::File {
+                        path: "/tmp/{{greeting}}.txt".to_string(),
+                        filename: None,
+                    },
+                    content_type: None,
+                    enabled: true,
+                },
+            ]),
+            timeout_ms: None,
+            skip_ssl_verification: false,
+        };
+
+        let resolved = resolve_request(&hbs, &request, &variables).unwrap();
+        match resolved.body {
+            RequestBody::Multipart(fields) => {
+                // Text field should be resolved.
+                match &fields[0].value {
+                    MultipartValue::Text(text) => assert_eq!(text, "hello world"),
+                    _ => panic!("expected text field"),
+                }
+                // File path should NOT be resolved (literal filesystem path).
+                match &fields[1].value {
+                    MultipartValue::File { path, .. } => {
+                        assert_eq!(path, "/tmp/{{greeting}}.txt")
+                    }
+                    _ => panic!("expected file field"),
+                }
+            }
+            _ => panic!("expected Multipart body"),
         }
     }
 

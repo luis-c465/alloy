@@ -6,59 +6,49 @@ import {
   IconFolderOpen,
 } from "@tabler/icons-react";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { useMemo, useRef, useState, type MouseEvent } from "react";
+import { memo, useMemo, useRef, useState, type MouseEvent } from "react";
 
 import type { FileEntry } from "~/bindings";
 import { Input } from "~/components/ui/input";
+import { FILE_TREE_INITIAL_EXPANSION_DEPTH } from "~/lib/constants";
+import { isHttpLikeFile } from "~/lib/path";
 import { cn } from "~/lib/utils";
 
 import { FileTreeContextMenu } from "./FileTreeContextMenu";
+import { useFileTreeContext } from "./FileTreeContext";
 
 type FileTreeNodeProps = {
   entry: FileEntry;
   depth: number;
-  activeFilePath: string | null;
-  selectedPath: string | null;
-  renamingPath: string | null;
-  renameDraft: string;
-  onSelect: (entry: FileEntry) => void;
-  onOpenFile: (path: string) => void;
-  onCreateFile: (parentPath: string) => void;
-  onCreateFolder: (parentPath: string) => void;
-  onBeginRename: (entry: FileEntry) => void;
-  onRenameDraftChange: (value: string) => void;
-  onSubmitRename: () => void;
-  onCancelRename: () => void;
-  onDelete: (entry: FileEntry) => void;
 };
 
-const isHttpLikeFile = (name: string): boolean => {
-  const lower = name.toLowerCase();
-  return lower.endsWith(".http") || lower.endsWith(".rest");
-};
-
-export function FileTreeNode({
+export const FileTreeNode = memo(function FileTreeNode({
   entry,
   depth,
-  activeFilePath,
-  selectedPath,
-  renamingPath,
-  renameDraft,
-  onSelect,
-  onOpenFile,
-  onCreateFile,
-  onCreateFolder,
-  onBeginRename,
-  onRenameDraftChange,
-  onSubmitRename,
-  onCancelRename,
-  onDelete,
 }: FileTreeNodeProps) {
-  const [isExpanded, setIsExpanded] = useState(depth < 2);
+  const [isExpanded, setIsExpanded] = useState(
+    depth < FILE_TREE_INITIAL_EXPANSION_DEPTH,
+  );
   const [contextMenuPosition, setContextMenuPosition] =
     useState<{ x: number; y: number } | null>(null);
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    activeFilePath,
+    selectedPath,
+    renamingPath,
+    renameDraft,
+    onSelect,
+    onOpenFile,
+    onCreateFile,
+    onCreateFolder,
+    onBeginRename,
+    onRenameDraftChange,
+    onSubmitRename,
+    onCancelRename,
+    onDelete,
+  } = useFileTreeContext();
 
   const isDirectory = entry.is_dir;
   const isRenaming = renamingPath === entry.path;
@@ -224,23 +214,10 @@ export function FileTreeNode({
               key={child.path}
               entry={child}
               depth={depth + 1}
-              activeFilePath={activeFilePath}
-              selectedPath={selectedPath}
-              renamingPath={renamingPath}
-              renameDraft={renameDraft}
-              onSelect={onSelect}
-              onOpenFile={onOpenFile}
-              onCreateFile={onCreateFile}
-              onCreateFolder={onCreateFolder}
-              onBeginRename={onBeginRename}
-              onRenameDraftChange={onRenameDraftChange}
-              onSubmitRename={onSubmitRename}
-              onCancelRename={onCancelRename}
-              onDelete={onDelete}
             />
           ))}
         </div>
       ) : null}
     </div>
   );
-}
+});

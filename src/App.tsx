@@ -24,6 +24,7 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { useShortcuts } from "~/hooks/useShortcuts";
+import { buildDefaultSavePath } from "~/lib/path";
 import {
   registerDirtyTabPromptHandler,
   registerSaveAsHandler,
@@ -52,37 +53,6 @@ type SaveAsState = {
   path: string;
   resolve: (path: string | null) => void;
 } | null;
-
-const sanitizeFileName = (value: string): string => {
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9._-]/g, "");
-
-  const baseName = normalized || "request";
-  return baseName.endsWith(".http") ? baseName : `${baseName}.http`;
-};
-
-const getPathSeparator = (path: string): string => (
-  path.includes("\\") && !path.includes("/") ? "\\" : "/"
-);
-
-const joinPath = (basePath: string, segment: string): string => {
-  const separator = getPathSeparator(basePath);
-  return basePath.endsWith("/") || basePath.endsWith("\\")
-    ? `${basePath}${segment}`
-    : `${basePath}${separator}${segment}`;
-};
-
-const buildDefaultSavePath = (tab: Tab, workspacePath: string | null): string => {
-  if (tab.filePath) {
-    return tab.filePath;
-  }
-
-  const fileName = sanitizeFileName(tab.requestName ?? tab.name);
-  return workspacePath ? joinPath(workspacePath, fileName) : fileName;
-};
 
 export default function App() {
   const sidebarPanelRef = usePanelRef();
@@ -127,10 +97,15 @@ export default function App() {
       }),
     );
     const unregisterSaveAs = registerSaveAsHandler(
-      async (tab) => new Promise<string | null>((resolve) => {
+        async (tab) => new Promise<string | null>((resolve) => {
         setSaveAsState({
           tab,
-          path: buildDefaultSavePath(tab, useWorkspaceStore.getState().workspacePath),
+          path: buildDefaultSavePath(
+            tab.name,
+            tab.requestName,
+            tab.filePath,
+            useWorkspaceStore.getState().workspacePath,
+          ),
           resolve,
         });
       }),

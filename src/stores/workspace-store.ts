@@ -1,9 +1,10 @@
 import { create } from "zustand";
 
 import type { EnvironmentData, FileEntry } from "~/bindings";
-import { api, listEnvironments } from "~/lib/api";
+import { api } from "~/lib/api";
+import { SIDEBAR_TABS } from "~/lib/constants";
 
-type SidebarTab = "collections" | "history";
+type SidebarTab = (typeof SIDEBAR_TABS)[number];
 
 interface WorkspaceStore {
   workspacePath: string | null;
@@ -33,7 +34,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
   activeEnvironment: null,
   environments: [],
   sidebarVisible: true,
-  sidebarTab: "collections",
+  sidebarTab: SIDEBAR_TABS[0],
   fileTree: [],
   setWorkspace: async (path) => {
     if (!path) {
@@ -53,21 +54,6 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
       activeEnvironment: null,
       environments: [],
       fileTree: [],
-    });
-
-    const [environmentList, fileTree] = await Promise.all([
-      listEnvironments(path),
-      api.workspace.list_files(path),
-    ]);
-
-    if (get().workspacePath !== path) {
-      return;
-    }
-
-    set({
-      environments: environmentList.environments,
-      activeEnvironment: environmentList.active,
-      fileTree,
     });
   },
   setSidebarVisible: (sidebarVisible) => set({ sidebarVisible }),

@@ -5,6 +5,37 @@ use crate::{error::AppError, workspace::types::FileEntry};
 
 const MAX_DEPTH: usize = 10;
 
+/// Verify that `target` is contained within `root` after resolving symlinks
+/// and `..` segments.  Returns the canonicalized target path on success.
+///
+/// When `target` does not exist yet (creation operations), pass its nearest
+/// existing ancestor (typically the parent directory) instead.
+#[allow(dead_code)]
+pub fn assert_within_directory(root: &Path, target: &Path) -> Result<PathBuf, AppError> {
+    let canonical_root = std::fs::canonicalize(root).map_err(|error| {
+        AppError::IoError(format!(
+            "Cannot resolve workspace root {}: {error}",
+            root.display()
+        ))
+    })?;
+
+    let canonical_target = std::fs::canonicalize(target).map_err(|error| {
+        AppError::IoError(format!(
+            "Cannot resolve path {}: {error}",
+            target.display()
+        ))
+    })?;
+
+    if !canonical_target.starts_with(&canonical_root) {
+        return Err(AppError::IoError(format!(
+            "Path escapes the workspace boundary: {}",
+            target.display()
+        )));
+    }
+
+    Ok(canonical_target)
+}
+
 /// Convert a file stem (e.g. "get-users" or "my request") into a PascalCase
 /// identifier suitable for use as an HTTP `@name` value (e.g. "GetUsers",
 /// "MyRequest").  Non-alphanumeric characters act as word boundaries and are
@@ -144,6 +175,30 @@ pub async fn read_file_content(path: &Path) -> Result<String, AppError> {
     Ok(tokio::fs::read_to_string(path).await?)
 }
 
+/// Write `content` to `path` atomically by first writing to a temporary
+/// sibling file, then renaming it into place.  This prevents a crash
+/// mid-write from corrupting the target file.
+pub async fn atomic_write(path: &Path, content: &[u8]) -> Result<(), AppError> {
+    let tmp_path = path.with_extension("tmp");
+    tokio::fs::write(&tmp_path, content).await.map_err(|error| {
+        AppError::IoError(format!(
+            "Failed to write temporary file {}: {error}",
+            tmp_path.display()
+        ))
+    })?;
+
+    if let Err(error) = tokio::fs::rename(&tmp_path, path).await {
+        // Best-effort cleanup of the temp file.
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+        return Err(AppError::IoError(format!(
+            "Failed to rename temporary file to {}: {error}",
+            path.display()
+        )));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,6 +264,34 @@ mod tests {
     fn stem_to_request_name_returns_fallback_for_empty() {
         assert_eq!(stem_to_request_name(""), "NewRequest");
         assert_eq!(stem_to_request_name("---"), "NewRequest");
+    }
+
+    #[test]
+    fn assert_within_directory_allows_child_path() {
+        let root = std::env::temp_dir();
+        let child = root.join("some-file");
+        // Create the child so canonicalize can resolve it.
+        std::fs::write(&child, "").unwrap();
+
+        let result = assert_within_directory(&root, &child);
+        assert!(result.is_ok());
+
+        std::fs::remove_file(child).unwrap();
+    }
+
+    #[test]
+    fn assert_within_directory_rejects_escaping_path() {
+        let root = std::env::temp_dir().join(format!("alloy-jail-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+
+        // /tmp/alloy-jail-xxx/../ resolves to /tmp, which is outside root.
+        let escaping = root.join("..");
+        // We can't canonicalize a non-existent target, but the parent exists.
+        // Instead test with the canonical /tmp dir which is outside root.
+        let result = assert_within_directory(&root, &std::env::temp_dir());
+        assert!(result.is_err());
+
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[tokio::test]

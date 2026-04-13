@@ -11,50 +11,38 @@ import { OpenWorkspaceDialog } from "~/components/workspace/OpenWorkspaceDialog"
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import {
   createDirectory,
   createHttpFile,
   deletePath,
   readHttpFile,
   renamePath,
 } from "~/lib/api";
+import { useFileTree } from "~/hooks/useFileTree";
+import {
+  INVALID_NAME_PATTERN,
+  getParentPath,
+  isHttpLikeFile,
+  joinPath,
+} from "~/lib/path";
 import { cn } from "~/lib/utils";
 import { useRequestStore } from "~/stores/request-store";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
+import { FileTreeContextProvider } from "./FileTreeContext";
 import { FileTreeNode } from "./FileTreeNode";
 
 type CreateMode =
   | { type: "file"; parentPath: string }
   | { type: "folder"; parentPath: string }
   | null;
-
-const INVALID_NAME_PATTERN = /[<>:"/\\|?*]/;
-
-const isHttpLikeFile = (name: string): boolean => {
-  const lower = name.toLowerCase();
-  return lower.endsWith(".http") || lower.endsWith(".rest");
-};
-
-const getPathSeparator = (path: string): string => {
-  return path.includes("\\") && !path.includes("/") ? "\\" : "/";
-};
-
-const joinPath = (basePath: string, segment: string): string => {
-  const separator = getPathSeparator(basePath);
-  if (basePath.endsWith("/") || basePath.endsWith("\\")) {
-    return `${basePath}${segment}`;
-  }
-  return `${basePath}${separator}${segment}`;
-};
-
-const getParentPath = (path: string): string => {
-  const normalized = path.replace(/[\\/]+$/, "");
-  const lastSlash = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
-  if (lastSlash <= 0) {
-    return normalized;
-  }
-  return normalized.slice(0, lastSlash);
-};
 
 const findEntryByPath = (entries: FileEntry[], targetPath: string): FileEntry | null => {
   for (const entry of entries) {
@@ -100,8 +88,9 @@ const isValidName = (value: string): boolean => {
 
 export function CollectionsPanel() {
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
-  const fileTree = useWorkspaceStore((state) => state.fileTree);
-  const refreshFileTree = useWorkspaceStore((state) => state.refreshFileTree);
+  const fallbackFileTree = useWorkspaceStore((state) => state.fileTree);
+  const fileTreeQuery = useFileTree(workspacePath);
+  const fileTree = fileTreeQuery.data ?? fallbackFileTree;
 
   const openRequestInTab = useRequestStore((state) => state.openRequestInTab);
   const activeFilePath = useRequestStore(
@@ -115,6 +104,7 @@ export function CollectionsPanel() {
   const [renameDraft, setRenameDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [pendingDeleteEntry, setPendingDeleteEntry] = useState<FileEntry | null>(null);
 
   const createInputRef = useRef<HTMLInputElement>(null);
 
@@ -162,7 +152,7 @@ export function CollectionsPanel() {
     setError(null);
     setIsBusy(true);
     try {
-      await refreshFileTree();
+      await fileTreeQuery.refetch();
     } catch (refreshError) {
       setError(
         refreshError instanceof Error
@@ -231,7 +221,7 @@ export function CollectionsPanel() {
       }
 
       cancelCreate();
-      await refreshFileTree();
+      await fileTreeQuery.refetch();
     } catch (createError) {
       setError(
         createError instanceof Error
@@ -248,16 +238,11 @@ export function CollectionsPanel() {
       return;
     }
 
-    const confirmed = window.confirm(`Delete "${entry.name}"? This action cannot be undone.`);
-    if (!confirmed) {
-      return;
-    }
-
     setError(null);
     setIsBusy(true);
     try {
       await deletePath(entry.path);
-      await refreshFileTree();
+      await fileTreeQuery.refetch();
 
       if (selectedPath === entry.path) {
         setSelectedPath(null);
@@ -271,7 +256,20 @@ export function CollectionsPanel() {
       setError(deleteError instanceof Error ? deleteError.message : "Failed to delete path");
     } finally {
       setIsBusy(false);
+      setPendingDeleteEntry(null);
     }
+  };
+
+  const handleRequestDelete = (entry: FileEntry) => {
+    setPendingDeleteEntry(entry);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDeleteEntry) {
+      return;
+    }
+
+    await handleDelete(pendingDeleteEntry);
   };
 
   const handleBeginRename = (entry: FileEntry) => {
@@ -329,7 +327,7 @@ export function CollectionsPanel() {
       setRenamingPath(null);
       setRenameDraft("");
       setSelectedPath(targetPath);
-      await refreshFileTree();
+      await fileTreeQuery.refetch();
     } catch (renameError) {
       setError(renameError instanceof Error ? renameError.message : "Failed to rename path");
     } finally {
@@ -466,44 +464,89 @@ export function CollectionsPanel() {
         <div className="border-b border-border px-2 py-1.5 text-xs text-destructive">{error}</div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto py-1">
-        {fileTree.length === 0 ? (
-          <div className="px-3 py-2 text-xs text-muted-foreground">No files found.</div>
-        ) : (
-          fileTree.map((entry) => (
-            <FileTreeNode
-              key={entry.path}
-              entry={entry}
-              depth={0}
-              activeFilePath={activeFilePath}
-              selectedPath={selectedPath}
-              renamingPath={renamingPath}
-              renameDraft={renameDraft}
-              onSelect={(nextEntry) => {
-                setSelectedPath(nextEntry.path);
+      <Dialog
+        open={pendingDeleteEntry !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteEntry(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete file</DialogTitle>
+            <DialogDescription>
+              Delete {pendingDeleteEntry ? `"${pendingDeleteEntry.name}"` : "the selected"}?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isBusy}
+              onClick={() => {
+                setPendingDeleteEntry(null);
               }}
-              onOpenFile={(path) => {
-                void handleOpenFile(path);
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isBusy}
+              onClick={() => {
+                void handleConfirmDelete();
               }}
-              onCreateFile={(parentPath) => {
-                startCreateAtPath("file", parentPath);
-              }}
-              onCreateFolder={(parentPath) => {
-                startCreateAtPath("folder", parentPath);
-              }}
-              onBeginRename={handleBeginRename}
-              onRenameDraftChange={setRenameDraft}
-              onSubmitRename={() => {
-                void handleSubmitRename();
-              }}
-              onCancelRename={handleCancelRename}
-              onDelete={(entryToDelete) => {
-                void handleDelete(entryToDelete);
-              }}
-            />
-          ))
-        )}
-      </div>
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <FileTreeContextProvider
+        activeFilePath={activeFilePath}
+        selectedPath={selectedPath}
+        renamingPath={renamingPath}
+        renameDraft={renameDraft}
+        onSelect={(entryToSelect) => {
+          setSelectedPath(entryToSelect.path);
+        }}
+        onOpenFile={(path) => {
+          void handleOpenFile(path);
+        }}
+        onCreateFile={(parentPath) => {
+          startCreateAtPath("file", parentPath);
+        }}
+        onCreateFolder={(parentPath) => {
+          startCreateAtPath("folder", parentPath);
+        }}
+        onBeginRename={handleBeginRename}
+        onRenameDraftChange={setRenameDraft}
+        onSubmitRename={() => {
+          void handleSubmitRename();
+        }}
+        onCancelRename={handleCancelRename}
+        onDelete={(entryToDelete) => {
+          handleRequestDelete(entryToDelete);
+        }}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto py-1">
+          {fileTree.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">No files found.</div>
+          ) : (
+            fileTree.map((entry) => (
+              <FileTreeNode
+                key={entry.path}
+                entry={entry}
+                depth={0}
+              />
+            ))
+          )}
+        </div>
+      </FileTreeContextProvider>
     </div>
   );
 }

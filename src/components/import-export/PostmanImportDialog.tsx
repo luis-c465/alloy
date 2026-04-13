@@ -87,6 +87,7 @@ export function PostmanImportDialog({ open, onOpenChange }: PostmanImportDialogP
   const [jsonContent, setJsonContent] = useState<string | null>(null);
   const [preview, setPreview] = useState<CollectionPreview | null>(null);
   const [createdFiles, setCreatedFiles] = useState<string[]>([]);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -147,11 +148,13 @@ export function PostmanImportDialog({ open, onOpenChange }: PostmanImportDialogP
     setError(null);
 
     try {
-      const files = await importPostmanCollection(jsonContent, workspacePath);
-      setCreatedFiles(files);
+      const result = await importPostmanCollection(jsonContent, workspacePath);
+      setCreatedFiles(result.created_files);
+      setImportWarnings(result.warnings);
       await refreshFileTree();
     } catch (importError) {
       setCreatedFiles([]);
+      setImportWarnings([]);
       setError(getErrorMessage(importError, "Failed to import Postman collection."));
     } finally {
       setIsImporting(false);
@@ -213,6 +216,19 @@ export function PostmanImportDialog({ open, onOpenChange }: PostmanImportDialogP
                   ))}
                 </div>
               </ScrollArea>
+            </div>
+          ) : null}
+
+          {importWarnings.length > 0 ? (
+            <div className="space-y-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+              <div className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                {importWarnings.length} {importWarnings.length === 1 ? "warning" : "warnings"} during import
+              </div>
+              <ul className="list-inside list-disc space-y-0.5 text-xs text-amber-700/80 dark:text-amber-300/80">
+                {importWarnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
             </div>
           ) : null}
 
