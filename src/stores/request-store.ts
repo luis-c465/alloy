@@ -706,10 +706,14 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
 
     try {
       const { activeEnvironment, workspacePath } = useWorkspaceStore.getState();
+      // Only resolve with environment if both values are present; if either is
+      // null, skip environment resolution to avoid a backend error.
+      const envName = activeEnvironment && workspacePath ? activeEnvironment : null;
+      const wsPath = activeEnvironment && workspacePath ? workspacePath : null;
       const response = await sendRequestWithEnvApi(
         payload,
-        activeEnvironment,
-        workspacePath,
+        envName,
+        wsPath,
       );
       if (requestToken === latestRequestTokenByTab.get(targetTabId)) {
         set((state) => ({

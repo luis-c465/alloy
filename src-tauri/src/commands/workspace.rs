@@ -139,7 +139,19 @@ impl WorkspaceApi for WorkspaceApiImpl {
             )));
         }
 
-        fs::rename_path(Path::new(&from_path), Path::new(&to_path)).await
+        fs::rename_path(Path::new(&from_path), Path::new(&to_path)).await?;
+
+        // After renaming an HTTP/REST file, update any @name values that still
+        // match the old file stem so they reflect the new filename.
+        let to = PathBuf::from(&to_path);
+        if is_http_file(&to) {
+            if let Err(e) = update_request_names_after_rename(&from, &to).await {
+                // Non-fatal: the rename already succeeded; just log the error.
+                eprintln!("Warning: could not update @name in {to_path}: {e}");
+            }
+        }
+
+        Ok(())
     }
 
     async fn ensure_workspace(self, workspace_path: String) -> Result<(), AppError> {
@@ -166,6 +178,55 @@ fn validate_workspace_path(workspace_path: &str) -> Result<PathBuf, AppError> {
     }
 
     Ok(path)
+}
+
+fn is_http_file(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|e| e.to_str()),
+        Some("http") | Some("rest")
+    )
+}
+
+fn path_stem(path: &Path) -> String {
+    path.file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// After renaming an HTTP/REST file, rewrite any `@name` value that still
+/// equals the sanitized form of the **old** stem so it reflects the new stem.
+async fn update_request_names_after_rename(from: &Path, to: &Path) -> Result<(), AppError> {
+    let old_name = fs::stem_to_request_name(&path_stem(from));
+    let new_name = fs::stem_to_request_name(&path_stem(to));
+
+    if old_name == new_name {
+        return Ok(());
+    }
+
+    let to_path_str = to.to_string_lossy().to_string();
+    let content = fs::read_file_content(to).await?;
+    let mut data = parse_http_file(&content, &to_path_str)?;
+
+    let mut changed = false;
+    for request in &mut data.requests {
+        if request.name.as_deref() == Some(&old_name) {
+            request.name = Some(new_name.clone());
+            // Also update the "name" entry in commands if present.
+            for (key, value) in &mut request.commands {
+                if key == "name" {
+                    *value = Some(new_name.clone());
+                }
+            }
+            changed = true;
+        }
+    }
+
+    if changed {
+        let updated = serialize_http_file(&data);
+        tokio::fs::write(to, updated).await?;
+    }
+
+    Ok(())
 }
 
 fn validate_name_segment(name: &str) -> Result<(), AppError> {

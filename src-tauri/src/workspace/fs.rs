@@ -4,7 +4,36 @@ use std::{future::Future, pin::Pin};
 use crate::{error::AppError, workspace::types::FileEntry};
 
 const MAX_DEPTH: usize = 10;
-const HTTP_TEMPLATE: &str = "### New Request\n# @name NewRequest\nGET https://example.com HTTP/1.1\n\n";
+
+/// Convert a file stem (e.g. "get-users" or "my request") into a PascalCase
+/// identifier suitable for use as an HTTP `@name` value (e.g. "GetUsers",
+/// "MyRequest").  Non-alphanumeric characters act as word boundaries and are
+/// stripped; digits are kept.  Returns `"NewRequest"` when the result would
+/// otherwise be empty.
+pub fn stem_to_request_name(stem: &str) -> String {
+    let mut result = String::new();
+    let mut capitalize_next = true;
+
+    for ch in stem.chars() {
+        if ch.is_alphanumeric() {
+            if capitalize_next {
+                result.extend(ch.to_uppercase());
+                capitalize_next = false;
+            } else {
+                result.push(ch);
+            }
+        } else {
+            // Treat any non-alphanumeric character as a word boundary.
+            capitalize_next = true;
+        }
+    }
+
+    if result.is_empty() {
+        "NewRequest".to_string()
+    } else {
+        result
+    }
+}
 
 pub async fn list_directory(root: &Path) -> Result<Vec<FileEntry>, AppError> {
     list_directory_recursive(root, 0).await
@@ -70,7 +99,15 @@ pub async fn ensure_alloy_dir(workspace_path: &Path) -> Result<PathBuf, AppError
 }
 
 pub async fn create_http_file(path: &Path) -> Result<(), AppError> {
-    tokio::fs::write(path, HTTP_TEMPLATE).await?;
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let request_name = stem_to_request_name(&stem);
+    let template = format!(
+        "### {request_name}\n# @name {request_name}\nGET https://example.com HTTP/1.1\n\n"
+    );
+    tokio::fs::write(path, template).await?;
     Ok(())
 }
 
@@ -143,5 +180,46 @@ mod tests {
         assert!(entries.iter().all(|entry| entry.name != ".git"));
 
         tokio::fs::remove_dir_all(root).await.unwrap();
+    }
+
+    #[test]
+    fn stem_to_request_name_handles_hyphenated_names() {
+        assert_eq!(stem_to_request_name("get-users"), "GetUsers");
+    }
+
+    #[test]
+    fn stem_to_request_name_handles_spaces() {
+        assert_eq!(stem_to_request_name("my request"), "MyRequest");
+    }
+
+    #[test]
+    fn stem_to_request_name_handles_plain_name() {
+        assert_eq!(stem_to_request_name("auth"), "Auth");
+    }
+
+    #[test]
+    fn stem_to_request_name_handles_already_pascal_case() {
+        assert_eq!(stem_to_request_name("GetUsers"), "GetUsers");
+    }
+
+    #[test]
+    fn stem_to_request_name_returns_fallback_for_empty() {
+        assert_eq!(stem_to_request_name(""), "NewRequest");
+        assert_eq!(stem_to_request_name("---"), "NewRequest");
+    }
+
+    #[tokio::test]
+    async fn create_http_file_uses_stem_as_request_name() {
+        let dir = std::env::temp_dir().join(format!("alloy-create-{}", Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let path = dir.join("get-users.http");
+
+        create_http_file(&path).await.unwrap();
+
+        let content = tokio::fs::read_to_string(&path).await.unwrap();
+        assert!(content.contains("# @name GetUsers"), "content was: {content}");
+        assert!(content.contains("### GetUsers"), "content was: {content}");
+
+        tokio::fs::remove_dir_all(dir).await.unwrap();
     }
 }
