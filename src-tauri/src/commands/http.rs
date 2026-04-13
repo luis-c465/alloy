@@ -198,5 +198,7 @@ fn clone_request(request: &HttpRequestData) -> HttpRequestData {
                 content_type: content_type.clone(),
             },
         },
+        timeout_ms: request.timeout_ms,
+        skip_ssl_verification: request.skip_ssl_verification,
     }
 }

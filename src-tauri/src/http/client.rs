@@ -24,6 +24,16 @@ static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .expect("failed to construct shared reqwest client")
 });
 
+static INSECURE_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .redirect(Policy::limited(10))
+        .user_agent("Alloy/0.1.0")
+        .danger_accept_invalid_certs(true)
+        .build()
+        .expect("failed to construct insecure reqwest client")
+});
+
 fn parse_url(raw: &str) -> Result<Url, AppError> {
     let trimmed = raw.trim();
 
@@ -158,6 +168,8 @@ pub async fn execute_request(request: HttpRequestData) -> Result<HttpResponseDat
         headers,
         query_params,
         body,
+        timeout_ms,
+        skip_ssl_verification,
     } = request;
 
     let mut url = parse_url(&raw_url)?;
@@ -173,7 +185,17 @@ pub async fn execute_request(request: HttpRequestData) -> Result<HttpResponseDat
     let is_multipart_request = matches!(&body, RequestBody::Multipart(_));
     let user_set_content_type = !is_multipart_request && has_content_type_header(&headers);
 
-    let mut builder = HTTP_CLIENT.request(method, url);
+    let client = if skip_ssl_verification {
+        &*INSECURE_HTTP_CLIENT
+    } else {
+        &*HTTP_CLIENT
+    };
+
+    let mut builder = client.request(method, url);
+
+    if let Some(timeout_ms) = timeout_ms.filter(|timeout_ms| *timeout_ms > 0) {
+        builder = builder.timeout(Duration::from_millis(timeout_ms));
+    }
 
     for header in headers.iter().filter(|header| header.enabled) {
         if is_multipart_request && header.key.eq_ignore_ascii_case(CONTENT_TYPE.as_str()) {
@@ -371,6 +393,8 @@ mod tests {
             headers: Vec::new(),
             query_params: Vec::new(),
             body: RequestBody::None,
+            timeout_ms: None,
+            skip_ssl_verification: false,
         };
 
         let response = execute_request(request)
@@ -411,6 +435,8 @@ mod tests {
                     enabled: true,
                 },
             ]),
+            timeout_ms: None,
+            skip_ssl_verification: false,
         };
 
         let response = execute_request(request)
@@ -457,6 +483,8 @@ mod tests {
                 content_type: None,
                 enabled: true,
             }]),
+            timeout_ms: None,
+            skip_ssl_verification: false,
         };
 
         let error = match execute_request(request).await {
@@ -494,6 +522,8 @@ mod tests {
                     enabled: true,
                 },
             ]),
+            timeout_ms: None,
+            skip_ssl_verification: false,
         };
 
         let response = execute_request(request)

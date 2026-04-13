@@ -5,7 +5,7 @@ import { createTauRPCProxy as createProxy, type InferCommandOutput } from 'taurp
 type TAURI_CHANNEL<T> = (response: T) => void
 
 
-export type AppError = { RequestError: string } | { IoError: string } | { ParseError: string } | { SerializationError: string } | { InvalidUrl: string } | "Timeout" | { NetworkError: string }
+export type AppError = { RequestError: string } | { IoError: string } | { FileNotFound: string } | { FileReadError: string } | { ParseError: string } | { SerializationError: string } | { InvalidUrl: string } | "Timeout" | { NetworkError: string }
 
 export type EnvironmentData = { name: string; variables: KeyValue[] }
 
@@ -23,7 +23,7 @@ export type HttpFileData = { path: string; requests: HttpFileRequest[]; variable
 
 export type HttpFileRequest = { name: string | null; method: string; url: string; headers: KeyValue[]; body: string | null; body_type: string; commands: ([string, string | null])[] }
 
-export type HttpRequestData = { method: string; url: string; headers: KeyValue[]; query_params: KeyValue[]; body: RequestBody }
+export type HttpRequestData = { method: string; url: string; headers: KeyValue[]; query_params: KeyValue[]; body: RequestBody; timeout_ms: number | null; skip_ssl_verification: boolean }
 
 export type HttpResponseData = { status: number; status_text: string; headers: KeyValue[]; body: string; size_bytes: number; time_ms: number }
 

@@ -89,6 +89,8 @@ pub fn resolve_request(
         headers,
         query_params,
         body,
+        timeout_ms: request.timeout_ms,
+        skip_ssl_verification: request.skip_ssl_verification,
     })
 }
 
@@ -159,6 +161,8 @@ mod tests {
                 enabled: true,
             }],
             body: RequestBody::Json("{\"name\":\"{{name}}\"}".to_string()),
+            timeout_ms: Some(1_500),
+            skip_ssl_verification: true,
         };
 
         let resolved = resolve_request(&hbs, &request, &variables).unwrap();
@@ -167,6 +171,8 @@ mod tests {
         assert_eq!(resolved.url, "https://localhost:3000/users");
         assert_eq!(resolved.headers[0].value, "Bearer abc123");
         assert_eq!(resolved.query_params[0].value, "42");
+        assert_eq!(resolved.timeout_ms, Some(1_500));
+        assert!(resolved.skip_ssl_verification);
 
         match resolved.body {
             RequestBody::Json(content) => assert_eq!(content, "{\"name\":\"Alloy\"}"),

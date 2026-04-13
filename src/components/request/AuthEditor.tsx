@@ -4,9 +4,12 @@ import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
+import { useWorkspaceStore } from "~/stores/workspace-store";
 import {
   encodeBase64Utf8,
+  getEnvironmentVariableMap,
   getAuthorizationHeaderValue,
+  resolveTemplateString,
   useRequestStore,
   type AuthType,
 } from "~/stores/request-store";
@@ -34,6 +37,13 @@ export function AuthEditor() {
   const setAuthBasicPassword = useRequestStore(
     (state) => state.setAuthBasicPassword,
   );
+  const activeEnvironment = useWorkspaceStore((state) => state.activeEnvironment);
+  const activeEnvironmentVariables = useWorkspaceStore((state) => {
+    const activeName = state.activeEnvironment;
+
+    return state.environments.find((environment) => environment.name === activeName)
+      ?.variables ?? [];
+  });
   const [showPassword, setShowPassword] = useState(false);
 
   const authType = activeTab?.authType ?? "none";
@@ -47,13 +57,21 @@ export function AuthEditor() {
     ) ?? false;
 
   const previewValue = useMemo(() => {
+    const environmentVariables = getEnvironmentVariableMap(activeEnvironmentVariables);
+
     return getAuthorizationHeaderValue(
       authType,
-      authBearer,
-      authBasicUsername,
-      authBasicPassword,
+      resolveTemplateString(authBearer, environmentVariables),
+      resolveTemplateString(authBasicUsername, environmentVariables),
+      resolveTemplateString(authBasicPassword, environmentVariables),
     );
-  }, [authBasicPassword, authBasicUsername, authBearer, authType]);
+  }, [
+    activeEnvironmentVariables,
+    authBasicPassword,
+    authBasicUsername,
+    authBearer,
+    authType,
+  ]);
 
   return (
     <div className="flex h-full min-h-[100px] flex-col gap-3 overflow-auto">
@@ -183,6 +201,12 @@ export function AuthEditor() {
         <p className="text-xs text-muted-foreground">
           The Authorization header will be auto-added when sending the request.
         </p>
+
+        {activeEnvironment ? (
+          <p className="text-xs text-muted-foreground">
+            Preview reflects variables from the active environment: {activeEnvironment}.
+          </p>
+        ) : null}
 
         {hasManualAuthorizationHeader && authType !== "none" ? (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">

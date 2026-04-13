@@ -250,8 +250,11 @@ Each feature is a vertical slice adding backend support (Rust/Reqwest) and front
 - This is a read-only display — no cookie editing or jar management.
 
 **Scope:**
+> **Updated by Step 4 executor:** The response tab union lives in `src/stores/request-store.ts`, so wiring a new Cookies tab also required updating that store type.
+
 - Create: `src/components/response/ResponseCookies.tsx`
 - Modify: `src/components/response/ResponsePanel.tsx` (add Cookies tab)
+- Modify: `src/stores/request-store.ts` (extend `ResponseTab` with `"cookies"`)
 
 **Sub-tasks:**
 
@@ -298,8 +301,13 @@ Each feature is a vertical slice adding backend support (Rust/Reqwest) and front
 - For timeout override: use `reqwest::RequestBuilder::timeout()` which overrides the client default.
 
 **Scope:**
+> **Updated by Step 5 executor:** Adding fields to `HttpRequestData` also required exhaustive updates in `src-tauri/src/commands/http.rs`, `src-tauri/src/environment/resolver.rs`, and a bindings refresh in `src/bindings.ts`.
+
 - Modify: `src-tauri/src/http/types.rs` (add options to HttpRequestData)
 - Modify: `src-tauri/src/http/client.rs` (insecure client, timeout override)
+- Modify: `src-tauri/src/commands/http.rs` (preserve request options when cloning/sending requests)
+- Modify: `src-tauri/src/environment/resolver.rs` (preserve request options during template resolution)
+- Modify: `src/bindings.ts` (refresh generated frontend typings for HttpRequestData)
 
 **Sub-tasks:**
 
@@ -351,7 +359,10 @@ Each feature is a vertical slice adding backend support (Rust/Reqwest) and front
 - These options need a UI in the request builder.
 
 **Scope:**
+> **Updated by Step 6 executor:** The repo did not yet include a shadcn-style switch primitive, so `src/components/ui/switch.tsx` was added to support the options UI.
+
 - Create: `src/components/request/OptionsEditor.tsx`
+- Create: `src/components/ui/switch.tsx`
 - Modify: `src/components/request/RequestPanel.tsx` (add Options tab or section)
 - Modify: `src/stores/request-store.ts` (add options state to Tab)
 

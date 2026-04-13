@@ -27,8 +27,8 @@ export interface MultipartField extends ApiMultipartField {
 
 export type BodyType = "none" | "json" | "form-urlencoded" | "form-data" | "raw";
 export type AuthType = "none" | "bearer" | "basic";
-export type RequestTab = "params" | "headers" | "body" | "auth";
-export type ResponseTab = "body" | "headers";
+export type RequestTab = "params" | "headers" | "body" | "auth" | "options";
+export type ResponseTab = "body" | "headers" | "cookies";
 
 export interface Tab {
   id: string;
@@ -50,6 +50,8 @@ export interface Tab {
   authBearer: string;
   authBasicUsername: string;
   authBasicPassword: string;
+  skipSslVerification: boolean;
+  timeoutMs: number | null;
   response: HttpResponseData | null;
   isLoading: boolean;
   error: string | null;
@@ -77,6 +79,8 @@ interface RequestStore {
   setAuthBearer: (authBearer: string) => void;
   setAuthBasicUsername: (authBasicUsername: string) => void;
   setAuthBasicPassword: (authBasicPassword: string) => void;
+  setSkipSslVerification: (skipSslVerification: boolean) => void;
+  setTimeoutMs: (timeoutMs: number | null) => void;
   setResponse: (response: HttpResponseData | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -158,6 +162,41 @@ export const encodeBase64Utf8 = (value: string): string => {
   }
 
   return btoa(binary);
+};
+
+const TEMPLATE_VARIABLE_PATTERN = /\{\{\s*([^{}]+?)\s*\}\}/g;
+
+export const getEnvironmentVariableMap = (
+  variables: ApiKeyValue[],
+): Map<string, string> => {
+  const entries = variables
+    .filter((variable) => variable.enabled && variable.key.trim().length > 0)
+    .map((variable) => [variable.key.trim(), variable.value] as const);
+
+  return new Map(entries);
+};
+
+export const resolveTemplateString = (
+  value: string,
+  variables: Map<string, string>,
+): string => {
+  if (!value.includes("{{")) {
+    return value;
+  }
+
+  return value.replace(TEMPLATE_VARIABLE_PATTERN, (_match, name: string) => {
+    const variableName = name.trim();
+    return variables.get(variableName) ?? `{{${variableName}}}`;
+  });
+};
+
+const getActiveEnvironmentVariableMap = (): Map<string, string> => {
+  const { activeEnvironment, environments } = useWorkspaceStore.getState();
+  const activeVariables = environments.find(
+    (environment) => environment.name === activeEnvironment,
+  )?.variables;
+
+  return getEnvironmentVariableMap(activeVariables ?? []);
 };
 
 export const getAuthorizationHeaderValue = (
@@ -293,7 +332,22 @@ const getErrorMessage = (error: unknown): string => {
   return "Failed to send request";
 };
 
-const getRequestHeaders = (tab: Tab): ApiKeyValue[] => {
+const normalizeTimeoutMs = (timeoutMs: number | null): number | null => {
+  if (timeoutMs === null) {
+    return null;
+  }
+
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000) {
+    return null;
+  }
+
+  return timeoutMs;
+};
+
+const getRequestHeaders = (
+  tab: Tab,
+  environmentVariables: Map<string, string> = new Map(),
+): ApiKeyValue[] => {
   const filteredHeaders = tab.headers.filter((header) => {
     if (!header.enabled) {
       return false;
@@ -308,9 +362,9 @@ const getRequestHeaders = (tab: Tab): ApiKeyValue[] => {
 
   const authHeaderValue = getAuthorizationHeaderValue(
     tab.authType,
-    tab.authBearer,
-    tab.authBasicUsername,
-    tab.authBasicPassword,
+    resolveTemplateString(tab.authBearer, environmentVariables),
+    resolveTemplateString(tab.authBasicUsername, environmentVariables),
+    resolveTemplateString(tab.authBasicPassword, environmentVariables),
   );
 
   if (!authHeaderValue) {
@@ -388,6 +442,8 @@ const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => ({
   authBearer: "",
   authBasicUsername: "",
   authBasicPassword: "",
+  skipSslVerification: false,
+  timeoutMs: null,
   response: null,
   isLoading: false,
   error: null,
@@ -671,6 +727,10 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     get().updateActiveTab({ authBasicUsername, isDirty: true }),
   setAuthBasicPassword: (authBasicPassword) =>
     get().updateActiveTab({ authBasicPassword, isDirty: true }),
+  setSkipSslVerification: (skipSslVerification) =>
+    get().updateActiveTab({ skipSslVerification, isDirty: true }),
+  setTimeoutMs: (timeoutMs) =>
+    get().updateActiveTab({ timeoutMs: normalizeTimeoutMs(timeoutMs), isDirty: true }),
   setResponse: (response) => get().updateActiveTab({ response }),
   setLoading: (isLoading) => get().updateActiveTab({ isLoading }),
   setError: (error) => get().updateActiveTab({ error }),
@@ -703,6 +763,8 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
         normalizedBodyType === "form-data" ? [createEmptyMultipartField()] : [],
       rawContentType:
         normalizedBodyType === "json" ? "application/json" : "text/plain",
+      skipSslVerification: false,
+      timeoutMs: null,
       response: null,
       isLoading: false,
       error: null,
@@ -833,10 +895,12 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       return;
     }
 
+    const environmentVariables = getActiveEnvironmentVariableMap();
+
     const payload: HttpRequestData = {
       method: tab.method,
       url: getBaseUrl(tab.url),
-      headers: getRequestHeaders(tab),
+      headers: getRequestHeaders(tab, environmentVariables),
       query_params: tab.queryParams
         .filter((param) => param.enabled)
         .map(toApiKeyValue),
@@ -847,6 +911,8 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
         tab.multipartFields,
         tab.rawContentType,
       ),
+      timeout_ms: tab.timeoutMs,
+      skip_ssl_verification: tab.skipSslVerification,
     };
 
     const requestToken = getNextRequestToken(targetTabId);

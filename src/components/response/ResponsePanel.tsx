@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { EmptyState } from "~/components/response/EmptyState";
 import { ResponseBody } from "~/components/response/ResponseBody";
+import { ResponseCookies } from "~/components/response/ResponseCookies";
 import { ResponseHeaders } from "~/components/response/ResponseHeaders";
 import { StatusBar } from "~/components/response/StatusBar";
 import { Button } from "~/components/ui/button";
@@ -22,6 +23,9 @@ export function ResponsePanel() {
 
   const showEmptyState = !response && !isLoading && !error;
   const headersCount = response?.headers.length ?? 0;
+  const cookiesCount =
+    response?.headers.filter((header) => header.key.trim().toLowerCase() === "set-cookie")
+      .length ?? 0;
   const canCopyBody = Boolean(response?.body);
 
   useEffect(() => {
@@ -57,7 +61,7 @@ export function ResponsePanel() {
           <Tabs
             value={activeResponseTab}
             onValueChange={(tab) =>
-              setActiveResponseTab(tab as "body" | "headers")
+              setActiveResponseTab(tab as "body" | "headers" | "cookies")
             }
             className="mt-3 flex min-h-0 flex-1 flex-col"
           >
@@ -66,6 +70,9 @@ export function ResponsePanel() {
                 <TabsTrigger value="body">Body</TabsTrigger>
                 <TabsTrigger value="headers">
                   Headers ({headersCount})
+                </TabsTrigger>
+                <TabsTrigger value="cookies">
+                  Cookies ({cookiesCount})
                 </TabsTrigger>
               </TabsList>
 
@@ -96,6 +103,13 @@ export function ResponsePanel() {
               className="mt-3 min-h-0 flex-1 overflow-hidden"
             >
               <ResponseHeaders />
+            </TabsContent>
+
+            <TabsContent
+              value="cookies"
+              className="mt-3 min-h-0 flex-1 overflow-hidden"
+            >
+              <ResponseCookies />
             </TabsContent>
           </Tabs>
         </>
