@@ -314,6 +314,8 @@ This phase is primarily frontend-focused. Most features add UI capabilities that
 
 ### Step 4: Postman Collection Import
 
+> **Updated by Step 4 executor:** Implementation also required `src-tauri/src/import_export/mod.rs`, `src-tauri/src/lib.rs`, `src/lib/api.ts`, and regenerated `src/bindings.ts` so the new TauRPC procedures are registered and callable from the frontend. The file-picker procedure returns the selected JSON file contents (not just its path) so the dialog can preview the collection name/request count before import.
+
 **Objective:** Allow users to import Postman Collection v2.1 JSON files, converting them into a workspace directory structure with .http files.
 
 **Context:**
@@ -323,9 +325,13 @@ This phase is primarily frontend-focused. Most features add UI capabilities that
 
 **Scope:**
 - Create: `src-tauri/src/import_export/postman.rs`
+- Modify: `src-tauri/src/import_export/mod.rs`
 - Modify: `src-tauri/src/commands/import_export.rs` (add procedure)
+- Modify: `src-tauri/src/lib.rs` (pass app handle into import/export resolver)
 - Create: `src/components/import-export/PostmanImportDialog.tsx`
 - Modify: `src/components/layout/Toolbar.tsx` (add to import menu)
+- Modify: `src/lib/api.ts`
+- Modify: `src/bindings.ts`
 
 **Sub-tasks:**
 
@@ -347,16 +353,17 @@ This phase is primarily frontend-focused. Most features add UI capabilities that
      - Returns a list of created file paths.
 
 2. **Add TauRPC procedure in `import_export.rs`:**
-   ```
-   async fn import_postman_collection(
-       json_content: String,
-       workspace_path: String,
+    ```
+    async fn import_postman_collection(
+        json_content: String,
+        workspace_path: String,
    ) -> Result<Vec<String>, AppError>;
    ```
-   Also add a procedure to pick the Postman JSON file via dialog:
-   ```
-   async fn pick_import_file() -> Result<Option<String>, AppError>;
-   ```
+    Also add a procedure to pick the Postman JSON file via dialog:
+    ```
+    async fn pick_import_file() -> Result<Option<String>, AppError>;
+    ```
+    Return the selected file's JSON contents so the frontend can preview the collection metadata before import.
 
 3. **Create `src/components/import-export/PostmanImportDialog.tsx`.** An import dialog:
    - "Select File" button that opens a file picker filtered to `.json` files.
@@ -373,6 +380,7 @@ This phase is primarily frontend-focused. Most features add UI capabilities that
 - **Filename sanitization:** Postman request names can contain any characters. Sanitize for filesystem: replace `/\:*?"<>|` with `-`, trim whitespace, limit length to 200 chars.
 - **Duplicate names:** If two requests have the same name in the same folder, append a number suffix: `get-users.http`, `get-users-2.http`.
 - **Body types:** Map Postman body modes: `raw` → Raw or JSON (check Content-Type header), `urlencoded` → FormUrlEncoded, `formdata` → Multipart, `file` → not supported (warn).
+- **Workspace `.http` limitations:** The current workspace parser/serializer only has first-class support for raw/json/urlencoded bodies. Multipart text fields may need to be emitted as a raw multipart body with a generated boundary, while multipart file parts should still warn/skip until the workspace format gains structured multipart import support.
 - **Auth:** Postman request-level auth should be converted to `Authorization` header or `# @auth` magic comment.
 
 **Verification:**

@@ -1,17 +1,39 @@
 use crate::{
     error::AppError,
     http::types::HttpRequestData,
-    import_export::curl::{curl_to_request, request_to_curl},
+    import_export::{
+        curl::{curl_to_request, request_to_curl},
+        postman::{parse_postman_collection, postman_to_workspace},
+    },
 };
+use tauri::AppHandle;
+use tauri_plugin_dialog::DialogExt;
+use tokio::sync::OnceCell;
 
 #[taurpc::procedures(path = "import_export", export_to = "../src/bindings.ts")]
 pub trait ImportExportApi {
     async fn export_curl(request: HttpRequestData) -> Result<String, AppError>;
     async fn import_curl(curl_command: String) -> Result<HttpRequestData, AppError>;
+    async fn import_postman_collection(
+        json_content: String,
+        workspace_path: String,
+    ) -> Result<Vec<String>, AppError>;
+    async fn pick_import_file() -> Result<Option<String>, AppError>;
 }
 
-#[derive(Clone, Default)]
-pub struct ImportExportApiImpl;
+#[derive(Clone)]
+pub struct ImportExportApiImpl {
+    pub app_handle: std::sync::Arc<OnceCell<AppHandle<tauri::Wry>>>,
+}
+
+impl ImportExportApiImpl {
+    fn app_handle(&self) -> Result<AppHandle<tauri::Wry>, AppError> {
+        self.app_handle
+            .get()
+            .cloned()
+            .ok_or_else(|| AppError::RequestError("App handle is not initialized".to_string()))
+    }
+}
 
 #[taurpc::resolvers]
 impl ImportExportApi for ImportExportApiImpl {
@@ -21,5 +43,49 @@ impl ImportExportApi for ImportExportApiImpl {
 
     async fn import_curl(self, curl_command: String) -> Result<HttpRequestData, AppError> {
         curl_to_request(&curl_command)
+    }
+
+    async fn import_postman_collection(
+        self,
+        json_content: String,
+        workspace_path: String,
+    ) -> Result<Vec<String>, AppError> {
+        tokio::task::spawn_blocking(move || {
+            let collection = parse_postman_collection(&json_content)?;
+            postman_to_workspace(&collection, std::path::Path::new(&workspace_path))
+        })
+        .await
+        .map_err(|error| {
+            AppError::RequestError(format!(
+                "Failed to import Postman collection in background task: {error}"
+            ))
+        })?
+    }
+
+    async fn pick_import_file(self) -> Result<Option<String>, AppError> {
+        let app_handle = self.app_handle()?;
+
+        tokio::task::spawn_blocking(move || {
+            let Some(file_path) = app_handle
+                .dialog()
+                .file()
+                .add_filter("JSON Files", &["json"])
+                .blocking_pick_file()
+            else {
+                return Ok(None);
+            };
+
+            let path = file_path.into_path().map_err(|error| {
+                AppError::RequestError(format!("Selected file is not a local path: {error}"))
+            })?;
+
+            let content = std::fs::read_to_string(&path).map_err(|error| {
+                AppError::IoError(format!("Failed to read {}: {error}", path.display()))
+            })?;
+
+            Ok(Some(content))
+        })
+        .await
+        .map_err(|error| AppError::RequestError(format!("Failed to open file picker: {error}")))?
     }
 }

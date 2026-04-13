@@ -48,6 +48,17 @@ export const importCurl = async (
   return api.import_export.import_curl(curlCommand);
 };
 
+export const importPostmanCollection = async (
+  jsonContent: string,
+  workspacePath: string,
+): Promise<string[]> => {
+  return api.import_export.import_postman_collection(jsonContent, workspacePath);
+};
+
+export const pickImportFile = async (): Promise<string | null> => {
+  return api.import_export.pick_import_file();
+};
+
 export const pickWorkspaceFolder = async (): Promise<string | null> => {
   return api.workspace.pick_workspace_folder();
 };

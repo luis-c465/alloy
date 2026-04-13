@@ -49,7 +49,12 @@ pub async fn run() {
             }
             .into_handler(),
         )
-        .merge(ImportExportApiImpl.into_handler())
+        .merge(
+            ImportExportApiImpl {
+                app_handle: app_handle.clone(),
+            }
+            .into_handler(),
+        )
         .merge(EnvironmentApiImpl { hbs: hbs.clone() }.into_handler())
         .merge(HistoryApiImpl { db: db.clone() }.into_handler());
 

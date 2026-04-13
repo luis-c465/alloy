@@ -37,7 +37,7 @@ export type PickedFile = { path: string; name: string; size_bytes: number | null
 
 export type RequestBody = "None" | { Json: string } | { FormUrlEncoded: KeyValue[] } | { Multipart: MultipartField[] } | { Raw: { content: string; content_type: string } }
 
-const ARGS_MAP = { '':'{"save_response_to_file":["body_base64","suggested_filename"],"send_request":["request"],"send_request_with_env":["request","environment_name","workspace_path"]}', 'environment':'{"delete_environment":["workspace_path","name"],"list_environments":["workspace_path"],"read_environment":["workspace_path","name"],"resolve_url_preview":["url","workspace_path","env_name"],"save_environment":["workspace_path","env"],"set_active_environment":["workspace_path","name"]}', 'history':'{"clear_history":[],"delete_history_entry":["id"],"get_history_entry":["id"],"list_history":["filter"]}', 'import_export':'{"export_curl":["request"],"import_curl":["curl_command"]}', 'workspace':'{"create_directory":["parent_path","dir_name"],"create_http_file":["dir_path","file_name"],"delete_path":["target_path"],"ensure_workspace":["workspace_path"],"list_files":["workspace_path"],"pick_file":[],"pick_workspace_folder":[],"read_http_file":["file_path"],"rename_path":["from_path","to_path"],"write_http_file":["file_path","data"]}' }
+const ARGS_MAP = { '':'{"save_response_to_file":["body_base64","suggested_filename"],"send_request":["request"],"send_request_with_env":["request","environment_name","workspace_path"]}', 'environment':'{"delete_environment":["workspace_path","name"],"list_environments":["workspace_path"],"read_environment":["workspace_path","name"],"resolve_url_preview":["url","workspace_path","env_name"],"save_environment":["workspace_path","env"],"set_active_environment":["workspace_path","name"]}', 'history':'{"clear_history":[],"delete_history_entry":["id"],"get_history_entry":["id"],"list_history":["filter"]}', 'import_export':'{"export_curl":["request"],"import_curl":["curl_command"],"import_postman_collection":["json_content","workspace_path"],"pick_import_file":[]}', 'workspace':'{"create_directory":["parent_path","dir_name"],"create_http_file":["dir_path","file_name"],"delete_path":["target_path"],"ensure_workspace":["workspace_path"],"list_files":["workspace_path"],"pick_file":[],"pick_workspace_folder":[],"read_http_file":["file_path"],"rename_path":["from_path","to_path"],"write_http_file":["file_path","data"]}' }
 export type Router = { "": {save_response_to_file: (bodyBase64: string | null, suggestedFilename: string | null) => Promise<boolean>, 
 send_request: (request: HttpRequestData) => Promise<HttpResponseData>, 
 send_request_with_env: (request: HttpRequestData, environmentName: string | null, workspacePath: string | null) => Promise<HttpResponseData>},
@@ -52,7 +52,9 @@ delete_history_entry: (id: number) => Promise<null>,
 get_history_entry: (id: number) => Promise<HistoryEntry | null>, 
 list_history: (filter: HistoryFilter) => Promise<HistoryListEntry[]>},
 "import_export": {export_curl: (request: HttpRequestData) => Promise<string>, 
-import_curl: (curlCommand: string) => Promise<HttpRequestData>},
+import_curl: (curlCommand: string) => Promise<HttpRequestData>, 
+import_postman_collection: (jsonContent: string, workspacePath: string) => Promise<string[]>, 
+pick_import_file: () => Promise<string | null>},
 "workspace": {create_directory: (parentPath: string, dirName: string) => Promise<string>, 
 create_http_file: (dirPath: string, fileName: string) => Promise<string>, 
 delete_path: (targetPath: string) => Promise<null>, 

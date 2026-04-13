@@ -11,6 +11,7 @@ import {
 import { EnvironmentSelector } from "~/components/environment/EnvironmentSelector";
 import { CurlExportDialog } from "~/components/import-export/CurlExportDialog";
 import { CurlImportDialog } from "~/components/import-export/CurlImportDialog";
+import { PostmanImportDialog } from "~/components/import-export/PostmanImportDialog";
 import { OpenWorkspaceDialog } from "~/components/workspace/OpenWorkspaceDialog";
 import { Button } from "~/components/ui/button";
 import {
@@ -40,6 +41,7 @@ export function Toolbar({
   const setWorkspace = useWorkspaceStore((state) => state.setWorkspace);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isPostmanImportDialogOpen, setIsPostmanImportDialogOpen] = useState(false);
 
   const activeWorkspaceName = workspaceName ?? workspaceNameFromStore;
 
@@ -128,7 +130,11 @@ export function Toolbar({
                 Export as cURL
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled>
+              <DropdownMenuItem
+                onSelect={() => {
+                  setIsPostmanImportDialogOpen(true);
+                }}
+              >
                 Import Postman Collection
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -149,6 +155,10 @@ export function Toolbar({
 
       <CurlImportDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen} />
       <CurlExportDialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen} />
+      <PostmanImportDialog
+        open={isPostmanImportDialogOpen}
+        onOpenChange={setIsPostmanImportDialogOpen}
+      />
     </>
   );
 }
