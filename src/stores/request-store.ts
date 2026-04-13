@@ -68,7 +68,10 @@ interface RequestStore {
   tabs: Tab[];
   activeTabId: string | null;
   createTab: (options?: Partial<Tab>) => string;
+  duplicateTab: (id: string) => string | null;
   closeTab: (id: string) => Promise<void>;
+  closeOtherTabs: (id: string) => Promise<void>;
+  closeTabsToRight: (id: string) => Promise<void>;
   setActiveTab: (id: string) => void;
   updateActiveTab: (patch: Partial<Tab>) => void;
   setMethod: (method: string) => void;
@@ -457,6 +460,47 @@ const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => ({
   ...overrides,
 });
 
+const cloneKeyValue = ({ key, value, enabled }: KeyValue): KeyValue => ({
+  key,
+  value,
+  enabled,
+  id: crypto.randomUUID(),
+});
+
+const cloneMultipartField = (field: MultipartField): MultipartField => ({
+  ...field,
+  value: structuredClone(field.value),
+  id: crypto.randomUUID(),
+});
+
+const duplicateTabData = (tab: Tab): Tab => createDefaultTab({
+  name: tab.name,
+  filePath: null,
+  requestIndex: null,
+  requestName: null,
+  isDirty: true,
+  method: tab.method,
+  url: tab.url,
+  headers: tab.headers.map(cloneKeyValue),
+  queryParams: tab.queryParams.map(cloneKeyValue),
+  bodyType: tab.bodyType,
+  bodyContent: tab.bodyContent,
+  bodyFormData: tab.bodyFormData.map(cloneKeyValue),
+  multipartFields: tab.multipartFields.map(cloneMultipartField),
+  rawContentType: tab.rawContentType,
+  authType: tab.authType,
+  authBearer: tab.authBearer,
+  authBasicUsername: tab.authBasicUsername,
+  authBasicPassword: tab.authBasicPassword,
+  skipSslVerification: tab.skipSslVerification,
+  timeoutMs: tab.timeoutMs,
+  response: null,
+  isLoading: false,
+  error: null,
+  activeRequestTab: tab.activeRequestTab,
+  activeResponseTab: tab.activeResponseTab,
+});
+
 const normalizeBodyType = (value: string): BodyType => {
   if (
     value === "json" ||
@@ -673,6 +717,31 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     }));
     return tab.id;
   },
+  duplicateTab: (id) => {
+    const sourceTab = get().tabs.find((item) => item.id === id);
+    if (!sourceTab) {
+      return null;
+    }
+
+    const duplicatedTab = duplicateTabData(sourceTab);
+
+    set((state) => {
+      const sourceIndex = state.tabs.findIndex((item) => item.id === id);
+      if (sourceIndex === -1) {
+        return state;
+      }
+
+      const nextTabs = [...state.tabs];
+      nextTabs.splice(sourceIndex + 1, 0, duplicatedTab);
+
+      return {
+        tabs: nextTabs,
+        activeTabId: duplicatedTab.id,
+      };
+    });
+
+    return duplicatedTab.id;
+  },
   closeTab: async (id) => {
     const tab = get().tabs.find((item) => item.id === id);
     if (!tab) {
@@ -697,6 +766,41 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     }
 
     set((state) => performCloseTab(state.tabs, state.activeTabId, id));
+  },
+  closeOtherTabs: async (id) => {
+    const tabIdsToClose = get()
+      .tabs
+      .filter((tab) => tab.id !== id)
+      .map((tab) => tab.id);
+
+    for (const tabId of tabIdsToClose) {
+      await get().closeTab(tabId);
+
+      if (get().tabs.some((tab) => tab.id === tabId)) {
+        return;
+      }
+    }
+
+    if (get().tabs.some((tab) => tab.id === id)) {
+      get().setActiveTab(id);
+    }
+  },
+  closeTabsToRight: async (id) => {
+    const { tabs } = get();
+    const sourceIndex = tabs.findIndex((tab) => tab.id === id);
+    if (sourceIndex === -1) {
+      return;
+    }
+
+    const tabIdsToClose = tabs.slice(sourceIndex + 1).map((tab) => tab.id);
+
+    for (const tabId of tabIdsToClose) {
+      await get().closeTab(tabId);
+
+      if (get().tabs.some((tab) => tab.id === tabId)) {
+        return;
+      }
+    }
   },
   setActiveTab: (id) => {
     set((state) => {
