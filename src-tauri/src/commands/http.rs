@@ -4,7 +4,7 @@ use crate::{
     history::{db::HistoryDb, types::HistoryEntry},
     http::{
         self,
-        types::{HttpRequestData, HttpResponseData, KeyValue, RequestBody},
+        types::{HttpRequestData, HttpResponseData, KeyValue, MultipartField, RequestBody},
     },
 };
 use chrono::Utc;
@@ -113,7 +113,10 @@ impl Api for ApiImpl {
 
         let response = http::client::execute_request(request_for_send).await?;
 
-        if let Err(error) = self.try_insert_history(&request_for_history, &response).await {
+        if let Err(error) = self
+            .try_insert_history(&request_for_history, &response)
+            .await
+        {
             eprintln!("Failed to insert history entry: {error}");
         }
 
@@ -127,9 +130,9 @@ fn request_body_to_string(body: &RequestBody) -> Option<String> {
         RequestBody::Json(content) => Some(content.clone()),
         RequestBody::Raw { content, .. } => Some(content.clone()),
         RequestBody::FormUrlEncoded(values) => Some(
-            serde_json::to_string(values)
-                .unwrap_or_else(|_| key_values_as_pairs(values).join("&")),
+            serde_json::to_string(values).unwrap_or_else(|_| key_values_as_pairs(values).join("&")),
         ),
+        RequestBody::Multipart(fields) => Some(serde_json::to_string(fields).unwrap_or_default()),
     }
 }
 
@@ -173,6 +176,17 @@ fn clone_request(request: &HttpRequestData) -> HttpRequestData {
                         key: item.key.clone(),
                         value: item.value.clone(),
                         enabled: item.enabled,
+                    })
+                    .collect(),
+            ),
+            RequestBody::Multipart(fields) => RequestBody::Multipart(
+                fields
+                    .iter()
+                    .map(|field| MultipartField {
+                        key: field.key.clone(),
+                        value: field.value.clone(),
+                        content_type: field.content_type.clone(),
+                        enabled: field.enabled,
                     })
                     .collect(),
             ),

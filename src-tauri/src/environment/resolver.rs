@@ -80,6 +80,7 @@ pub fn resolve_request(
         },
         RequestBody::None => RequestBody::None,
         RequestBody::FormUrlEncoded(data) => RequestBody::FormUrlEncoded(data.clone()),
+        RequestBody::Multipart(fields) => RequestBody::Multipart(fields.clone()),
     };
 
     Ok(HttpRequestData {

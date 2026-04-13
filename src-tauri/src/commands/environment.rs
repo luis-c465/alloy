@@ -14,10 +14,17 @@ use crate::{
 #[taurpc::procedures(path = "environment", export_to = "../src/bindings.ts")]
 pub trait EnvironmentApi {
     async fn list_environments(workspace_path: String) -> Result<EnvironmentList, AppError>;
-    async fn read_environment(workspace_path: String, name: String) -> Result<EnvironmentData, AppError>;
-    async fn save_environment(workspace_path: String, env: EnvironmentData) -> Result<(), AppError>;
+    async fn read_environment(
+        workspace_path: String,
+        name: String,
+    ) -> Result<EnvironmentData, AppError>;
+    async fn save_environment(workspace_path: String, env: EnvironmentData)
+        -> Result<(), AppError>;
     async fn delete_environment(workspace_path: String, name: String) -> Result<(), AppError>;
-    async fn set_active_environment(workspace_path: String, name: Option<String>) -> Result<(), AppError>;
+    async fn set_active_environment(
+        workspace_path: String,
+        name: Option<String>,
+    ) -> Result<(), AppError>;
     async fn resolve_url_preview(
         url: String,
         workspace_path: String,

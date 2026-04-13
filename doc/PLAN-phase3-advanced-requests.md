@@ -78,8 +78,13 @@ Each feature is a vertical slice adding backend support (Rust/Reqwest) and front
 - Files are referenced by path (not uploaded to the backend as bytes). The Rust backend reads files directly from disk.
 
 **Scope:**
+> **Updated by Step 1 executor:** `AppError` lives in `src-tauri/src/error.rs`, and adding a new `RequestBody` variant also required exhaustive-match updates in `src-tauri/src/commands/http.rs` and `src-tauri/src/environment/resolver.rs`.
+
 - Modify: `src-tauri/src/http/types.rs` (add Multipart types)
 - Modify: `src-tauri/src/http/client.rs` (handle multipart body construction)
+- Modify: `src-tauri/src/error.rs` (add file-related error variants)
+- Modify: `src-tauri/src/commands/http.rs` (clone/history handling for multipart bodies)
+- Modify: `src-tauri/src/environment/resolver.rs` (preserve multipart bodies during environment resolution)
 
 **Sub-tasks:**
 
@@ -102,7 +107,7 @@ Each feature is a vertical slice adding backend support (Rust/Reqwest) and front
    - Set the form on the builder: `builder.multipart(form)`.
    - Do NOT manually set Content-Type header — reqwest sets it automatically with the correct boundary.
 
-3. **Add file-related error variants** to `error.rs`:
+3. **Add file-related error variants** to `src-tauri/src/error.rs`:
    - `FileNotFound(String)` — if the referenced file doesn't exist.
    - `FileReadError(String)` — if the file can't be read.
 

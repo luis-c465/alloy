@@ -34,9 +34,10 @@ pub struct WorkspaceApiImpl {
 
 impl WorkspaceApiImpl {
     fn app_handle(&self) -> Result<AppHandle<tauri::Wry>, AppError> {
-        self.app_handle.get().cloned().ok_or_else(|| {
-            AppError::RequestError("App handle is not initialized".to_string())
-        })
+        self.app_handle
+            .get()
+            .cloned()
+            .ok_or_else(|| AppError::RequestError("App handle is not initialized".to_string()))
     }
 }
 
@@ -73,7 +74,11 @@ impl WorkspaceApi for WorkspaceApiImpl {
         parse_http_file(&content, &file_path)
     }
 
-    async fn write_http_file(self, file_path: String, mut data: HttpFileData) -> Result<(), AppError> {
+    async fn write_http_file(
+        self,
+        file_path: String,
+        mut data: HttpFileData,
+    ) -> Result<(), AppError> {
         let path = PathBuf::from(&file_path);
         if let Some(parent) = path.parent() {
             if !parent.exists() {
@@ -90,7 +95,11 @@ impl WorkspaceApi for WorkspaceApiImpl {
         Ok(())
     }
 
-    async fn create_http_file(self, dir_path: String, file_name: String) -> Result<String, AppError> {
+    async fn create_http_file(
+        self,
+        dir_path: String,
+        file_name: String,
+    ) -> Result<String, AppError> {
         let dir = PathBuf::from(&dir_path);
         if !dir.exists() || !dir.is_dir() {
             return Err(AppError::IoError(format!(
@@ -111,7 +120,11 @@ impl WorkspaceApi for WorkspaceApiImpl {
         Ok(path.to_string_lossy().to_string())
     }
 
-    async fn create_directory(self, parent_path: String, dir_name: String) -> Result<String, AppError> {
+    async fn create_directory(
+        self,
+        parent_path: String,
+        dir_name: String,
+    ) -> Result<String, AppError> {
         let parent = PathBuf::from(&parent_path);
         if !parent.exists() || !parent.is_dir() {
             return Err(AppError::IoError(format!(

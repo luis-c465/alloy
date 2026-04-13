@@ -8,10 +8,28 @@ pub struct KeyValue {
 }
 
 #[derive(Clone, Serialize, Deserialize, specta::Type)]
+pub enum MultipartValue {
+    Text(String),
+    File {
+        path: String,
+        filename: Option<String>,
+    },
+}
+
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
+pub struct MultipartField {
+    pub key: String,
+    pub value: MultipartValue,
+    pub content_type: Option<String>,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize, specta::Type)]
 pub enum RequestBody {
     None,
     Json(String),
     FormUrlEncoded(Vec<KeyValue>),
+    Multipart(Vec<MultipartField>),
     Raw {
         content: String,
         content_type: String,

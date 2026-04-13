@@ -7,6 +7,10 @@ pub enum AppError {
     RequestError(String),
     #[error("I/O error: {0}")]
     IoError(String),
+    #[error("File not found: {0}")]
+    FileNotFound(String),
+    #[error("File read error: {0}")]
+    FileReadError(String),
     #[error("Parse error: {0}")]
     ParseError(String),
     #[error("Serialization error: {0}")]

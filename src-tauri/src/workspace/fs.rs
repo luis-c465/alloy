@@ -104,9 +104,8 @@ pub async fn create_http_file(path: &Path) -> Result<(), AppError> {
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
     let request_name = stem_to_request_name(&stem);
-    let template = format!(
-        "### {request_name}\n# @name {request_name}\nGET https://example.com HTTP/1.1\n\n"
-    );
+    let template =
+        format!("### {request_name}\n# @name {request_name}\nGET https://example.com HTTP/1.1\n\n");
     tokio::fs::write(path, template).await?;
     Ok(())
 }
@@ -159,8 +158,12 @@ mod tests {
             .await
             .unwrap();
         tokio::fs::create_dir_all(root.join(".git")).await.unwrap();
-        tokio::fs::write(root.join("z-last.http"), "").await.unwrap();
-        tokio::fs::write(root.join("a-first.txt"), "").await.unwrap();
+        tokio::fs::write(root.join("z-last.http"), "")
+            .await
+            .unwrap();
+        tokio::fs::write(root.join("a-first.txt"), "")
+            .await
+            .unwrap();
         tokio::fs::write(root.join("src").join("inner.http"), "")
             .await
             .unwrap();
@@ -217,7 +220,10 @@ mod tests {
         create_http_file(&path).await.unwrap();
 
         let content = tokio::fs::read_to_string(&path).await.unwrap();
-        assert!(content.contains("# @name GetUsers"), "content was: {content}");
+        assert!(
+            content.contains("# @name GetUsers"),
+            "content was: {content}"
+        );
         assert!(content.contains("### GetUsers"), "content was: {content}");
 
         tokio::fs::remove_dir_all(dir).await.unwrap();
