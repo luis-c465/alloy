@@ -25,8 +25,17 @@ export type HttpFileRequest = { name: string | null; method: string; url: string
 
 export type HttpRequestData = { method: string; url: string; headers: KeyValue[]; query_params: KeyValue[]; body: RequestBody; timeout_ms: number | null; skip_ssl_verification: boolean }
 
-export type HttpResponseData = { status: number; status_text: string; headers: KeyValue[]; body: string; is_binary: boolean; body_base64: string | null; content_type: string; size_bytes: number; time_ms: number; is_truncated: boolean }
+export type HttpResponseData = { status: number; status_text: string; headers: KeyValue[]; body: string; is_binary: boolean; body_base64: string | null; content_type: string; size_bytes: number; time_ms: number; 
+/**
+ * True when the response body exceeded the maximum buffer size and was
+ * truncated.  The `size_bytes` field still reflects the full size.
+ */
+is_truncated: boolean }
 
+/**
+ * Result of importing a Postman collection, including any non-fatal warnings
+ * about skipped features (e.g. file upload fields).
+ */
 export type ImportResult = { created_files: string[]; warnings: string[] }
 
 export type KeyValue = { key: string; value: string; enabled: boolean }
