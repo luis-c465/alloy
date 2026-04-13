@@ -1,17 +1,26 @@
 import { IconClock, IconFolder } from "@tabler/icons-react";
-import { useState } from "react";
 
 import { CollectionsPanel } from "~/components/sidebar/CollectionsPanel";
+import { HistoryPanel } from "~/components/sidebar/HistoryPanel";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { useWorkspaceStore } from "~/stores/workspace-store";
 
 export function Sidebar() {
-  const [activeTab, setActiveTab] = useState("collections");
+  const activeTab = useWorkspaceStore((state) => state.sidebarTab);
+  const setActiveTab = useWorkspaceStore((state) => state.setSidebarTab);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-border p-2">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => {
+            if (value === "collections" || value === "history") {
+              setActiveTab(value);
+            }
+          }}
+        >
           <TabsList className="w-full justify-start" variant="line">
             <TabsTrigger value="collections" className="max-w-8 flex-none px-2">
               <IconFolder className="size-3.5" />
@@ -33,9 +42,7 @@ export function Sidebar() {
         {activeTab === "collections" ? (
           <CollectionsPanel />
         ) : (
-          <div className="p-3 text-xs text-muted-foreground">
-            History panel placeholder
-          </div>
+          <HistoryPanel />
         )}
       </ScrollArea>
     </div>
