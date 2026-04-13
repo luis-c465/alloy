@@ -2,6 +2,9 @@ use std::fmt::Write;
 
 use crate::workspace::types::{HttpFileData, HttpFileRequest};
 
+const FILE_BODY_PREFIX: &str = "@file:";
+const SAVE_BODY_PREFIX: &str = "@save:";
+
 pub fn serialize_http_file(data: &HttpFileData) -> String {
     let mut output = String::new();
 
@@ -58,9 +61,31 @@ fn write_request(output: &mut String, request: &HttpFileRequest) {
     output.push('\n');
 
     if let Some(body) = &request.body {
-        output.push_str(body);
-        output.push('\n');
+        write_body(output, body);
     }
+}
+
+fn write_body(output: &mut String, body: &str) {
+    if let Some(filepath) = body.strip_prefix(FILE_BODY_PREFIX) {
+        let _ = writeln!(output, "< {filepath}");
+        return;
+    }
+
+    if let Some((filepath, text)) = body
+        .strip_prefix(SAVE_BODY_PREFIX)
+        .and_then(|value| value.split_once(':'))
+    {
+        if !text.is_empty() {
+            output.push_str(text);
+            output.push('\n');
+            output.push('\n');
+        }
+        let _ = writeln!(output, ">> {filepath}");
+        return;
+    }
+
+    output.push_str(body);
+    output.push('\n');
 }
 
 #[cfg(test)]
@@ -111,6 +136,64 @@ mod tests {
         assert_eq!(
             reparsed.requests[0].body,
             Some("{\"hello\":\"world\"}".to_string())
+        );
+    }
+
+    #[test]
+    fn serialize_load_from_file_marker_back_to_http_syntax() {
+        let data = HttpFileData {
+            path: "sample.http".to_string(),
+            variables: vec![],
+            requests: vec![HttpFileRequest {
+                name: Some("LoadUsers".to_string()),
+                method: "POST".to_string(),
+                url: "https://example.com/users".to_string(),
+                headers: vec![],
+                body: Some("@file:payload.json".to_string()),
+                body_type: "raw".to_string(),
+                commands: vec![],
+            }],
+        };
+
+        let serialized = serialize_http_file(&data);
+
+        assert!(serialized.contains("\n< payload.json\n"));
+
+        let reparsed = parse_http_file(&serialized, &data.path).unwrap();
+        assert_eq!(
+            reparsed.requests[0].body.as_deref(),
+            Some("@file:payload.json")
+        );
+    }
+
+    #[test]
+    fn serialize_save_to_file_marker_back_to_http_syntax() {
+        let data = HttpFileData {
+            path: "sample.http".to_string(),
+            variables: vec![],
+            requests: vec![HttpFileRequest {
+                name: Some("SaveUsers".to_string()),
+                method: "POST".to_string(),
+                url: "https://example.com/users".to_string(),
+                headers: vec![KeyValue {
+                    key: "Content-Type".to_string(),
+                    value: "application/json".to_string(),
+                    enabled: true,
+                }],
+                body: Some("@save:responses/users.json:{\"hello\":\"world\"}".to_string()),
+                body_type: "json".to_string(),
+                commands: vec![],
+            }],
+        };
+
+        let serialized = serialize_http_file(&data);
+
+        assert!(serialized.contains("{\"hello\":\"world\"}\n\n>> responses/users.json\n"));
+
+        let reparsed = parse_http_file(&serialized, &data.path).unwrap();
+        assert_eq!(
+            reparsed.requests[0].body.as_deref(),
+            Some("@save:responses/users.json:{\"hello\":\"world\"}")
         );
     }
 }

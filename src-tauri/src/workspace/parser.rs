@@ -124,4 +124,17 @@ mod tests {
         assert_eq!(request.name.as_deref(), Some("GetUsers"));
         assert!(request.commands.iter().any(|(key, _)| key == "no-log"));
     }
+
+    #[test]
+    fn parse_load_from_file_body_as_special_marker() {
+        let content = "###\nPOST https://example.com/upload HTTP/1.1\nContent-Type: application/json\n\n< payload.json\n";
+
+        let parsed = parse_http_file(content, "load.http").unwrap();
+
+        assert_eq!(parsed.requests.len(), 1);
+        assert_eq!(
+            parsed.requests[0].body.as_deref(),
+            Some("@file:payload.json")
+        );
+    }
 }
