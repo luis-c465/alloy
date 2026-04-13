@@ -2,11 +2,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import { IconFolderOpen } from "@tabler/icons-react";
 
 import { Button } from "~/components/ui/button";
-import {
-  ensureWorkspace,
-  listFiles,
-  pickWorkspaceFolder,
-} from "~/lib/api";
+import { ensureWorkspace, pickWorkspaceFolder } from "~/lib/api";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
 type OpenWorkspaceDialogProps = {
@@ -28,7 +24,6 @@ export function OpenWorkspaceDialog({
   className,
 }: OpenWorkspaceDialogProps) {
   const setWorkspace = useWorkspaceStore((state) => state.setWorkspace);
-  const setFileTree = useWorkspaceStore((state) => state.setFileTree);
   const [isOpening, setIsOpening] = useState(false);
 
   const openWorkspace = useCallback(async () => {
@@ -45,14 +40,11 @@ export function OpenWorkspaceDialog({
       }
 
       await ensureWorkspace(path);
-      const fileTree = await listFiles(path);
-
-      setWorkspace(path);
-      setFileTree(fileTree);
+      await setWorkspace(path);
     } finally {
       setIsOpening(false);
     }
-  }, [isOpening, setFileTree, setWorkspace]);
+  }, [isOpening, setWorkspace]);
 
   if (children) {
     return children({ openWorkspace, isOpening });

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 import type { EnvironmentData, FileEntry } from "~/bindings";
-import { api } from "~/lib/api";
+import { api, listEnvironments } from "~/lib/api";
 
 type SidebarTab = "collections" | "history";
 
@@ -13,7 +13,7 @@ interface WorkspaceStore {
   sidebarVisible: boolean;
   sidebarTab: SidebarTab;
   fileTree: FileEntry[];
-  setWorkspace: (path: string | null) => void;
+  setWorkspace: (path: string | null) => Promise<void>;
   setSidebarVisible: (visible: boolean) => void;
   setSidebarTab: (tab: SidebarTab) => void;
   setActiveEnvironment: (name: string | null) => void;
@@ -35,7 +35,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
   sidebarVisible: true,
   sidebarTab: "collections",
   fileTree: [],
-  setWorkspace: (path) => {
+  setWorkspace: async (path) => {
     if (!path) {
       set({
         workspacePath: null,
@@ -50,6 +50,24 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
     set({
       workspacePath: path,
       workspaceName: getWorkspaceName(path),
+      activeEnvironment: null,
+      environments: [],
+      fileTree: [],
+    });
+
+    const [environmentList, fileTree] = await Promise.all([
+      listEnvironments(path),
+      api.workspace.list_files(path),
+    ]);
+
+    if (get().workspacePath !== path) {
+      return;
+    }
+
+    set({
+      environments: environmentList.environments,
+      activeEnvironment: environmentList.active,
+      fileTree,
     });
   },
   setSidebarVisible: (sidebarVisible) => set({ sidebarVisible }),

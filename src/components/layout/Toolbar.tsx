@@ -31,7 +31,6 @@ export function Toolbar({
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const workspaceNameFromStore = useWorkspaceStore((state) => state.workspaceName);
   const setWorkspace = useWorkspaceStore((state) => state.setWorkspace);
-  const setFileTree = useWorkspaceStore((state) => state.setFileTree);
 
   const activeWorkspaceName = workspaceName ?? workspaceNameFromStore;
 
@@ -79,13 +78,12 @@ export function Toolbar({
                   </DropdownMenuItem>
                 )}
               </OpenWorkspaceDialog>
-              <DropdownMenuItem
-                onSelect={() => {
-                  setWorkspace(null);
-                  setFileTree([]);
-                }}
-              >
-                Close Workspace
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void setWorkspace(null);
+                  }}
+                >
+                  Close Workspace
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

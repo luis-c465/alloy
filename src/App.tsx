@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   Panel,
   Group as PanelGroup,
@@ -11,7 +12,75 @@ import { TabBar } from "~/components/layout/TabBar";
 import { Toolbar } from "~/components/layout/Toolbar";
 import { RequestPanel } from "~/components/request/RequestPanel";
 import { ResponsePanel } from "~/components/response/ResponsePanel";
-import { useRequestStore } from "~/stores/request-store";
+import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { useKeyboardShortcuts } from "~/hooks/useKeyboardShortcuts";
+import {
+  registerDirtyTabPromptHandler,
+  registerSaveAsHandler,
+  type DirtyTabDecision,
+  type Tab,
+  useRequestStore,
+} from "~/stores/request-store";
+import { useWorkspaceStore } from "~/stores/workspace-store";
+
+type DirtyPromptState =
+  | {
+    mode: "tab";
+    tab: Tab;
+    resolve: (decision: DirtyTabDecision) => void;
+  }
+  | {
+    mode: "app";
+    tabCount: number;
+    resolve: (decision: DirtyTabDecision) => void;
+  }
+  | null;
+
+type SaveAsState = {
+  tab: Tab;
+  path: string;
+  resolve: (path: string | null) => void;
+} | null;
+
+const sanitizeFileName = (value: string): string => {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9._-]/g, "");
+
+  const baseName = normalized || "request";
+  return baseName.endsWith(".http") ? baseName : `${baseName}.http`;
+};
+
+const getPathSeparator = (path: string): string => (
+  path.includes("\\") && !path.includes("/") ? "\\" : "/"
+);
+
+const joinPath = (basePath: string, segment: string): string => {
+  const separator = getPathSeparator(basePath);
+  return basePath.endsWith("/") || basePath.endsWith("\\")
+    ? `${basePath}${segment}`
+    : `${basePath}${separator}${segment}`;
+};
+
+const buildDefaultSavePath = (tab: Tab, workspacePath: string | null): string => {
+  if (tab.filePath) {
+    return tab.filePath;
+  }
+
+  const fileName = sanitizeFileName(tab.requestName ?? tab.name);
+  return workspacePath ? joinPath(workspacePath, fileName) : fileName;
+};
 
 export default function App() {
   const sidebarPanelRef = usePanelRef();
@@ -25,26 +94,94 @@ export default function App() {
   });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const isAutoCollapsingRef = useRef(false);
+  const [dirtyPromptState, setDirtyPromptState] = useState<DirtyPromptState>(null);
+  const [saveAsState, setSaveAsState] = useState<SaveAsState>(null);
+  const allowWindowCloseRef = useRef(false);
+
+  useKeyboardShortcuts();
 
   useEffect(() => {
-    const handleGlobalSend = (event: KeyboardEvent) => {
-      if (event.key !== "Enter") {
+    const unregisterDirtyPrompt = registerDirtyTabPromptHandler(
+      async (tab) => new Promise<DirtyTabDecision>((resolve) => {
+        setDirtyPromptState({ mode: "tab", tab, resolve });
+      }),
+    );
+    const unregisterSaveAs = registerSaveAsHandler(
+      async (tab) => new Promise<string | null>((resolve) => {
+        setSaveAsState({
+          tab,
+          path: buildDefaultSavePath(tab, useWorkspaceStore.getState().workspacePath),
+          resolve,
+        });
+      }),
+    );
+
+    return () => {
+      unregisterDirtyPrompt();
+      unregisterSaveAs();
+    };
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    void getCurrentWindow().onCloseRequested(async (event) => {
+      if (allowWindowCloseRef.current) {
+        allowWindowCloseRef.current = false;
         return;
       }
 
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+      const dirtyTabs = useRequestStore.getState().tabs.filter((tab) => tab.isDirty);
+      if (dirtyTabs.length === 0) {
         return;
       }
 
       event.preventDefault();
-      void useRequestStore.getState().sendRequest();
-    };
 
-    window.addEventListener("keydown", handleGlobalSend);
+      const decision = await new Promise<DirtyTabDecision>((resolve) => {
+        setDirtyPromptState({
+          mode: "app",
+          tabCount: dirtyTabs.length,
+          resolve,
+        });
+      });
+
+      if (decision === "cancel") {
+        return;
+      }
+
+      if (decision === "save") {
+        for (const tab of dirtyTabs) {
+          const saved = await useRequestStore.getState().saveTab(tab.id);
+          if (!saved) {
+            return;
+          }
+        }
+      }
+
+      allowWindowCloseRef.current = true;
+      await getCurrentWindow().close();
+    }).then((cleanup) => {
+      unlisten = cleanup;
+    });
 
     return () => {
-      window.removeEventListener("keydown", handleGlobalSend);
+      unlisten?.();
     };
+  }, []);
+
+  const resolveDirtyPrompt = useCallback((decision: DirtyTabDecision) => {
+    setDirtyPromptState((currentState) => {
+      currentState?.resolve(decision);
+      return null;
+    });
+  }, []);
+
+  const resolveSaveAs = useCallback((path: string | null) => {
+    setSaveAsState((currentState) => {
+      currentState?.resolve(path);
+      return null;
+    });
   }, []);
 
   const collapseSidebar = useCallback(() => {
@@ -160,6 +297,94 @@ export default function App() {
           </div>
         </Panel>
       </PanelGroup>
+
+      <Dialog
+        open={dirtyPromptState !== null}
+        onOpenChange={(open) => {
+          if (!open && dirtyPromptState) {
+            resolveDirtyPrompt("cancel");
+          }
+        }}
+      >
+        <DialogContent showCloseButton={false} className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {dirtyPromptState?.mode === "app"
+                ? "Save changes before closing?"
+                : `Save changes to ${dirtyPromptState?.tab.name || "this request"}?`}
+            </DialogTitle>
+            <DialogDescription>
+              {dirtyPromptState?.mode === "app"
+                ? `You have ${dirtyPromptState.tabCount} tab${dirtyPromptState.tabCount === 1 ? "" : "s"} with unsaved changes.`
+                : "Your changes will be lost if you don’t save them first."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => resolveDirtyPrompt("cancel")}>
+              Cancel
+            </Button>
+            <Button variant="secondary" onClick={() => resolveDirtyPrompt("discard")}>
+              Don&apos;t Save
+            </Button>
+            <Button onClick={() => resolveDirtyPrompt("save")}>
+              {dirtyPromptState?.mode === "app" ? "Save All" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={saveAsState !== null}
+        onOpenChange={(open) => {
+          if (!open && saveAsState) {
+            resolveSaveAs(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Save Request As</DialogTitle>
+            <DialogDescription>
+              Choose where to save {saveAsState?.tab.name || "this request"}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <label htmlFor="save-request-path" className="text-xs font-medium text-foreground">
+              File path
+            </label>
+            <Input
+              id="save-request-path"
+              value={saveAsState?.path ?? ""}
+              onChange={(event) => {
+                const nextPath = event.target.value;
+                setSaveAsState((currentState) => (
+                  currentState
+                    ? { ...currentState, path: nextPath }
+                    : currentState
+                ));
+              }}
+              placeholder="/path/to/request.http"
+              className="font-mono text-xs"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => resolveSaveAs(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const nextPath = saveAsState?.path.trim() ?? "";
+                resolveSaveAs(nextPath || null);
+              }}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

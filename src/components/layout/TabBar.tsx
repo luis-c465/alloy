@@ -61,12 +61,12 @@ export function TabBar() {
                 }}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                onMouseDown={(event) => {
-                  if (event.button === 1) {
-                    event.preventDefault();
-                    closeTab(tab.id);
-                  }
-                }}
+                 onMouseDown={(event) => {
+                   if (event.button === 1) {
+                     event.preventDefault();
+                     void closeTab(tab.id);
+                   }
+                 }}
                 className="flex min-w-0 flex-1 items-center gap-2 pl-2 text-xs"
               >
                 <span
@@ -93,7 +93,7 @@ export function TabBar() {
                 className="my-auto size-4 shrink-0 opacity-60 transition-opacity group-hover:opacity-100"
                 onClick={(event) => {
                   event.stopPropagation();
-                  closeTab(tab.id);
+                  void closeTab(tab.id);
                 }}
               >
                 <IconX className="size-3" />

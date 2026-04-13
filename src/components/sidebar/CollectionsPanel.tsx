@@ -5,7 +5,7 @@ import {
 } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 
-import type { FileEntry, HttpFileRequest } from "~/bindings";
+import type { FileEntry } from "~/bindings";
 import { OpenWorkspaceDialog } from "~/components/workspace/OpenWorkspaceDialog";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -55,15 +55,6 @@ const getParentPath = (path: string): string => {
   return normalized.slice(0, lastSlash);
 };
 
-const getBasename = (path: string): string => {
-  const normalized = path.replace(/[\\/]+$/, "");
-  const index = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
-  if (index < 0) {
-    return normalized;
-  }
-  return normalized.slice(index + 1);
-};
-
 const findEntryByPath = (entries: FileEntry[], targetPath: string): FileEntry | null => {
   for (const entry of entries) {
     if (entry.path === targetPath) {
@@ -104,22 +95,6 @@ const isValidName = (value: string): boolean => {
   }
 
   return !INVALID_NAME_PATTERN.test(trimmed);
-};
-
-const withFallbackName = (
-  request: HttpFileRequest,
-  fileName: string,
-  index: number,
-  total: number,
-): HttpFileRequest => {
-  if (request.name?.trim()) {
-    return request;
-  }
-
-  return {
-    ...request,
-    name: total > 1 ? `${fileName} #${index + 1}` : fileName,
-  };
 };
 
 export function CollectionsPanel() {
@@ -211,9 +186,8 @@ export function CollectionsPanel() {
         return;
       }
 
-      const fileName = getBasename(path);
       requests.forEach((request, index) => {
-        openRequestInTab(withFallbackName(request, fileName, index, requests.length), path);
+        openRequestInTab(request, path, index);
       });
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : "Failed to open file");

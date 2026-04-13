@@ -1036,6 +1036,8 @@ The app layout shifts from a simple vertical split (request/response) to a three
 **Context:**
 - All backend services and frontend components are built. This step connects them and handles the remaining integration points.
 
+> **Updated by Step 12 executor:** The backend does not expose a `workspace.save_dialog` procedure, so Save As is implemented with a frontend dialog that collects the destination path and writes via `workspace.write_http_file`. Window-close interception is also handled from the frontend with `@tauri-apps/api/window.onCloseRequested`, which works with the current Tauri v2 setup.
+
 **Scope:**
 - Modify: `src/stores/request-store.ts` (save flow, send-time variable resolution)
 - Modify: `src/stores/workspace-store.ts` (load environments on workspace open)
@@ -1045,8 +1047,8 @@ The app layout shifts from a simple vertical split (request/response) to a three
 **Sub-tasks:**
 
 1. **Implement the Save flow in `request-store.ts`.** Add actions:
-   - `saveActiveTab()` — if `filePath` is set, serialize the tab's request data back to .http format and write to the file. If the file contains multiple requests, re-serialize all requests for that file (load other requests from their tabs or re-read the file). Set `isDirty: false`.
-   - `saveActiveTabAs()` — opens a save dialog (via backend `workspace.save_dialog`), creates a new .http file, updates the tab's `filePath`.
+    - `saveActiveTab()` — if `filePath` is set, serialize the tab's request data back to .http format and write to the file. If the file contains multiple requests, re-serialize all requests for that file (load other requests from their tabs or re-read the file). Set `isDirty: false`.
+    - `saveActiveTabAs()` — opens a save dialog (implemented in the frontend for the current codebase), creates a new .http file, updates the tab's `filePath`.
    - For tabs with `filePath: null` (new/unsaved), `Ctrl+S` should trigger "Save As".
    - For tabs with a `filePath`, `Ctrl+S` saves directly.
 
@@ -1083,6 +1085,7 @@ The app layout shifts from a simple vertical split (request/response) to a three
 - **Multi-request file saves:** If a file contains 3 requests and the user edits request #2, saving must re-serialize all 3 requests. Load request #1 and #3 from their open tabs (if any) or re-read them from disk. This is the trickiest part of the save flow.
 - **File conflicts:** If the user edits a file externally while it's open in Alloy, saving could overwrite external changes. For v1, last-write-wins. File watching is a future enhancement.
 - **Save dialog on app close:** When the user closes the app window with dirty tabs, Tauri should intercept the close event and prompt to save. Use Tauri's `on_close_requested` event handler.
+- **Save dialog on app close:** When the user closes the app window with dirty tabs, intercept the close event and prompt to save. In the current app this can be handled from the frontend with `getCurrentWindow().onCloseRequested(...)`.
 - **Keyboard shortcut conflicts:** `Ctrl+S` might conflict with browser/webview default behavior. Call `event.preventDefault()` in the handler.
 
 **Verification:**

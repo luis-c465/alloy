@@ -1,12 +1,18 @@
 import { create } from "zustand";
 import type {
+  HttpFileData,
   HttpFileRequest,
   HttpRequestData,
   HttpResponseData,
   KeyValue as ApiKeyValue,
   RequestBody,
 } from "~/bindings";
-import { sendRequest as sendRequestApi } from "~/lib/api";
+import {
+  readHttpFile,
+  sendRequestWithEnv as sendRequestWithEnvApi,
+  writeHttpFile,
+} from "~/lib/api";
+import { useWorkspaceStore } from "~/stores/workspace-store";
 
 export interface KeyValue extends ApiKeyValue {
   id: string;
@@ -20,6 +26,8 @@ export interface Tab {
   id: string;
   name: string;
   filePath: string | null;
+  requestIndex: number | null;
+  requestName: string | null;
   isDirty: boolean;
   method: string;
   url: string;
@@ -40,7 +48,7 @@ interface RequestStore {
   tabs: Tab[];
   activeTabId: string | null;
   createTab: (options?: Partial<Tab>) => string;
-  closeTab: (id: string) => void;
+  closeTab: (id: string) => Promise<void>;
   setActiveTab: (id: string) => void;
   updateActiveTab: (patch: Partial<Tab>) => void;
   setMethod: (method: string) => void;
@@ -58,11 +66,48 @@ interface RequestStore {
   setActiveResponseTab: (tab: ResponseTab) => void;
   markDirty: () => void;
   markClean: () => void;
-  openRequestInTab: (request: HttpFileRequest, filePath: string) => string;
+  openRequestInTab: (
+    request: HttpFileRequest,
+    filePath: string,
+    requestIndex?: number,
+  ) => string;
   syncQueryParamsToUrl: () => void;
   syncUrlToQueryParams: () => void;
+  saveTab: (id: string) => Promise<boolean>;
+  saveActiveTab: () => Promise<boolean>;
+  saveActiveTabAs: () => Promise<boolean>;
   sendRequest: () => Promise<void>;
 }
+
+export type DirtyTabDecision = "save" | "discard" | "cancel";
+
+type DirtyTabPromptHandler = (tab: Tab) => Promise<DirtyTabDecision>;
+type SaveAsHandler = (tab: Tab) => Promise<string | null>;
+
+let dirtyTabPromptHandler: DirtyTabPromptHandler | null = null;
+let saveAsHandler: SaveAsHandler | null = null;
+
+export const registerDirtyTabPromptHandler = (
+  handler: DirtyTabPromptHandler,
+): (() => void) => {
+  dirtyTabPromptHandler = handler;
+
+  return () => {
+    if (dirtyTabPromptHandler === handler) {
+      dirtyTabPromptHandler = null;
+    }
+  };
+};
+
+export const registerSaveAsHandler = (handler: SaveAsHandler): (() => void) => {
+  saveAsHandler = handler;
+
+  return () => {
+    if (saveAsHandler === handler) {
+      saveAsHandler = null;
+    }
+  };
+};
 
 const createEmptyKeyValue = (): KeyValue => ({
   key: "",
@@ -112,6 +157,31 @@ const toRequestBody = (
   }
 };
 
+const toHttpFileBody = (tab: Tab): string | null => {
+  switch (tab.bodyType) {
+    case "json":
+    case "raw":
+      return tab.bodyContent.trim() ? tab.bodyContent : null;
+    case "form-urlencoded": {
+      const params = new URLSearchParams();
+
+      for (const item of tab.bodyFormData) {
+        if (!item.enabled || !item.key.trim()) {
+          continue;
+        }
+
+        params.append(item.key, item.value);
+      }
+
+      const serialized = params.toString();
+      return serialized.length > 0 ? serialized : null;
+    }
+    case "none":
+    default:
+      return null;
+  }
+};
+
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
     return error.message;
@@ -158,10 +228,19 @@ const parseQueryParamsFromUrl = (url: string): KeyValue[] => {
   }
 };
 
+const getFileTabName = (filePath: string, requestIndex: number): string => {
+  const normalized = filePath.replace(/[\\/]+$/, "");
+  const lastSlash = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+  const fileName = lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized;
+  return requestIndex > 0 ? `${fileName} #${requestIndex + 1}` : fileName;
+};
+
 const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => ({
   id: crypto.randomUUID(),
   name: "New Request",
   filePath: null,
+  requestIndex: null,
+  requestName: null,
   isDirty: false,
   method: "GET",
   url: "",
@@ -221,6 +300,154 @@ const updateTabById = (
   patch: Partial<Tab>,
 ): Tab[] => tabs.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab));
 
+const removeTabById = (tabs: Tab[], tabId: string): Tab[] => (
+  tabs.filter((tab) => tab.id !== tabId)
+);
+
+const performCloseTab = (tabs: Tab[], activeTabId: string | null, tabId: string) => {
+  if (tabs.length <= 1) {
+    const tab = createDefaultTab();
+    return {
+      tabs: [tab],
+      activeTabId: tab.id,
+    };
+  }
+
+  const currentIndex = tabs.findIndex((tab) => tab.id === tabId);
+  if (currentIndex === -1) {
+    return {
+      tabs,
+      activeTabId,
+    };
+  }
+
+  const nextTabs = removeTabById(tabs, tabId);
+  latestRequestTokenByTab.delete(tabId);
+
+  if (activeTabId !== tabId) {
+    return { tabs: nextTabs, activeTabId };
+  }
+
+  const nextActiveTab = nextTabs[currentIndex] ?? nextTabs[currentIndex - 1] ?? null;
+  return {
+    tabs: nextTabs,
+    activeTabId: nextActiveTab?.id ?? null,
+  };
+};
+
+const toHttpFileRequest = (
+  tab: Tab,
+  commands: Array<[string, string | null]> = [],
+): HttpFileRequest => ({
+  name: tab.requestName?.trim() || null,
+  method: tab.method || "GET",
+  url: tab.url,
+  headers: tab.headers
+    .filter((header) => header.enabled && header.key.trim().length > 0)
+    .map(toApiKeyValue),
+  body: toHttpFileBody(tab),
+  body_type: tab.bodyType,
+  commands,
+});
+
+const buildExistingFileSavePayload = async (
+  tab: Tab,
+  openTabs: Tab[],
+): Promise<HttpFileData> => {
+  const currentFile = await readHttpFile(tab.filePath!);
+  const tabsByIndex = new Map<number, Tab>();
+
+  for (const openTab of openTabs) {
+    if (openTab.requestIndex === null) {
+      continue;
+    }
+
+    tabsByIndex.set(openTab.requestIndex, openTab);
+  }
+
+  const requests = currentFile.requests.map((request, index) => {
+    const openTab = tabsByIndex.get(index);
+    if (!openTab) {
+      return request;
+    }
+
+    return toHttpFileRequest(openTab, request.commands);
+  });
+
+  return {
+    path: currentFile.path,
+    variables: currentFile.variables,
+    requests,
+  };
+};
+
+const buildSingleRequestSavePayload = (tab: Tab, filePath: string): HttpFileData => ({
+  path: filePath,
+  variables: [],
+  requests: [toHttpFileRequest(tab)],
+});
+
+const saveTabById = async (
+  tabId: string,
+  getStore: () => RequestStore,
+  setStore: (
+    partial:
+      | Partial<RequestStore>
+      | ((state: RequestStore) => Partial<RequestStore>),
+  ) => void,
+  forceSaveAs = false,
+): Promise<boolean> => {
+  const state = getStore();
+  const tab = state.tabs.find((item) => item.id === tabId);
+  if (!tab) {
+    return false;
+  }
+
+  const selectedPath = forceSaveAs || !tab.filePath
+    ? await saveAsHandler?.(tab) ?? null
+    : tab.filePath;
+
+  if (!selectedPath) {
+    return false;
+  }
+
+  const shouldPreserveExistingFile = !forceSaveAs && tab.filePath === selectedPath;
+  const payload = shouldPreserveExistingFile
+    ? await buildExistingFileSavePayload(
+        tab,
+        state.tabs.filter((item) => item.filePath === tab.filePath),
+      )
+    : buildSingleRequestSavePayload(tab, selectedPath);
+
+  await writeHttpFile(selectedPath, payload);
+
+  setStore((currentState) => ({
+    tabs: currentState.tabs.map((item) => {
+      if (shouldPreserveExistingFile && item.filePath === selectedPath) {
+        return { ...item, isDirty: false };
+      }
+
+      if (item.id === tabId) {
+        return {
+          ...item,
+          filePath: selectedPath,
+          requestIndex: 0,
+          isDirty: false,
+        };
+      }
+
+      return item;
+    }),
+  }));
+
+  const { workspacePath, refreshFileTree } = useWorkspaceStore.getState();
+  if (workspacePath && selectedPath.startsWith(workspacePath)) {
+    await refreshFileTree();
+  }
+
+  return true;
+};
+
 const initialTab = createDefaultTab();
 
 export const useRequestStore = create<RequestStore>()((set, get) => ({
@@ -234,34 +461,30 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     }));
     return tab.id;
   },
-  closeTab: (id) => {
-    set((state) => {
-      if (state.tabs.length <= 1) {
-        const tab = createDefaultTab();
-        return {
-          tabs: [tab],
-          activeTabId: tab.id,
-        };
+  closeTab: async (id) => {
+    const tab = get().tabs.find((item) => item.id === id);
+    if (!tab) {
+      return;
+    }
+
+    if (tab.isDirty) {
+      const decision = dirtyTabPromptHandler
+        ? await dirtyTabPromptHandler(tab)
+        : "cancel";
+
+      if (decision === "cancel") {
+        return;
       }
 
-      const currentIndex = state.tabs.findIndex((tab) => tab.id === id);
-      if (currentIndex === -1) {
-        return state;
+      if (decision === "save") {
+        const saved = await saveTabById(id, get, set);
+        if (!saved) {
+          return;
+        }
       }
+    }
 
-      const nextTabs = state.tabs.filter((tab) => tab.id !== id);
-      latestRequestTokenByTab.delete(id);
-
-      if (state.activeTabId !== id) {
-        return { tabs: nextTabs };
-      }
-
-      const nextActiveTab = nextTabs[currentIndex] ?? nextTabs[currentIndex - 1] ?? null;
-      return {
-        tabs: nextTabs,
-        activeTabId: nextActiveTab?.id ?? null,
-      };
-    });
+    set((state) => performCloseTab(state.tabs, state.activeTabId, id));
   },
   setActiveTab: (id) => {
     set((state) => {
@@ -305,12 +528,15 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     get().updateActiveTab({ activeResponseTab }),
   markDirty: () => get().updateActiveTab({ isDirty: true }),
   markClean: () => get().updateActiveTab({ isDirty: false }),
-  openRequestInTab: (request, filePath) => {
+  openRequestInTab: (request, filePath, requestIndex = 0) => {
     const normalizedBodyType = normalizeBodyType(request.body_type);
-    const tabName = request.name?.trim() || "New Request";
+    const requestName = request.name?.trim() || null;
+    const tabName = requestName || getFileTabName(filePath, requestIndex);
     const tab = createDefaultTab({
       name: tabName,
       filePath,
+      requestIndex,
+      requestName,
       isDirty: false,
       method: request.method || "GET",
       url: request.url,
@@ -425,6 +651,23 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       // Ignore malformed URLs while the user is typing.
     }
   },
+  saveTab: async (id) => saveTabById(id, get, set),
+  saveActiveTab: async () => {
+    const activeTabId = get().activeTabId;
+    if (!activeTabId) {
+      return false;
+    }
+
+    return saveTabById(activeTabId, get, set);
+  },
+  saveActiveTabAs: async () => {
+    const activeTabId = get().activeTabId;
+    if (!activeTabId) {
+      return false;
+    }
+
+    return saveTabById(activeTabId, get, set, true);
+  },
   sendRequest: async () => {
     const { tabs, activeTabId } = get();
     const targetTabId = activeTabId ?? tabs[0]?.id ?? null;
@@ -462,7 +705,12 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     }));
 
     try {
-      const response = await sendRequestApi(payload);
+      const { activeEnvironment, workspacePath } = useWorkspaceStore.getState();
+      const response = await sendRequestWithEnvApi(
+        payload,
+        activeEnvironment,
+        workspacePath,
+      );
       if (requestToken === latestRequestTokenByTab.get(targetTabId)) {
         set((state) => ({
           tabs: updateTabById(state.tabs, targetTabId, { response }),

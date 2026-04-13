@@ -22,6 +22,14 @@ export const sendRequest = async (
   return api.send_request(data);
 };
 
+export const sendRequestWithEnv = async (
+  data: HttpRequestData,
+  environmentName: string | null,
+  workspacePath: string | null,
+): Promise<HttpResponseData> => {
+  return api.send_request_with_env(data, environmentName, workspacePath);
+};
+
 export const pickWorkspaceFolder = async (): Promise<string | null> => {
   return api.workspace.pick_workspace_folder();
 };
