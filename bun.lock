@@ -8,6 +8,7 @@
         "@codemirror/lang-html": "^6.4.11",
         "@codemirror/lang-json": "^6.0.2",
         "@codemirror/lang-xml": "^6.1.0",
+        "@codemirror/search": "^6.6.0",
         "@codemirror/theme-one-dark": "^6.1.3",
         "@fontsource-variable/inter": "^5.2.8",
         "@tabler/icons-react": "^3.41.1",

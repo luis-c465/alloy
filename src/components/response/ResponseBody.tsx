@@ -1,10 +1,13 @@
 import { json } from "@codemirror/lang-json";
 import { html } from "@codemirror/lang-html";
+import { search, searchKeymap } from "@codemirror/search";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { keymap } from "@codemirror/view";
 import CodeMirror from "@uiw/react-codemirror";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { JsonFilter } from "~/components/response/JsonFilter";
 import { useActiveTabField } from "~/hooks/useActiveTab";
 
 const MAX_PREVIEW_BYTES = 1024 * 1024;
@@ -38,6 +41,7 @@ const getContentType = (
 export function ResponseBody() {
   const response = useActiveTabField("response", null);
   const [isDark, setIsDark] = useState(false);
+  const [displayBody, setDisplayBody] = useState("");
 
   useEffect(() => {
     const root = document.documentElement;
@@ -50,30 +54,53 @@ export function ResponseBody() {
     return () => observer.disconnect();
   }, []);
 
-  const contentType = getContentType(response?.headers);
+  const contentType = useMemo(() => getContentType(response?.headers), [response]);
   const body = response?.body ?? "";
-  const bodyBytes = new Blob([body]).size;
+  const bodyBytes = useMemo(() => new Blob([body]).size, [body]);
   const isTruncated = bodyBytes > MAX_PREVIEW_BYTES;
   const previewBody = isTruncated ? body.slice(0, MAX_PREVIEW_BYTES) : body;
+  const isJsonContent = contentType.includes("application/json");
 
-  let bodyValue = previewBody;
-  if (contentType.includes("application/json")) {
-    try {
-      const parsed = JSON.parse(previewBody);
-      bodyValue = JSON.stringify(parsed, null, 2);
-    } catch {
-      bodyValue = previewBody;
+  const parsedJsonBody = useMemo(() => {
+    if (!isJsonContent) {
+      return null;
     }
-  }
 
-  const extensions = contentType.includes("application/json")
-    ? [json()]
-    : contentType.includes("text/html")
-      ? [html()]
-      : contentType.includes("text/xml") ||
-          contentType.includes("application/xml")
-        ? [xml()]
-        : [];
+    try {
+      return JSON.parse(body);
+    } catch {
+      return null;
+    }
+  }, [body, isJsonContent]);
+
+  const rawDisplayBody = useMemo(() => {
+    if (!isJsonContent) {
+      return previewBody;
+    }
+
+    if (!parsedJsonBody) {
+      return previewBody;
+    }
+
+    return JSON.stringify(parsedJsonBody, null, 2);
+  }, [isJsonContent, parsedJsonBody, previewBody]);
+
+  useEffect(() => {
+    setDisplayBody(rawDisplayBody);
+  }, [rawDisplayBody]);
+
+  const extensions = useMemo(() => {
+    const languageExtensions = isJsonContent
+      ? [json()]
+      : contentType.includes("text/html")
+        ? [html()]
+        : contentType.includes("text/xml") ||
+            contentType.includes("application/xml")
+          ? [xml()]
+          : [];
+
+    return [...languageExtensions, search(), keymap.of(searchKeymap)];
+  }, [contentType, isJsonContent]);
 
   if (!response || !body) {
     return (
@@ -91,9 +118,17 @@ export function ResponseBody() {
         </div>
       ) : null}
 
+      {parsedJsonBody ? (
+        <JsonFilter
+          parsedBody={parsedJsonBody}
+          rawDisplayBody={rawDisplayBody}
+          onDisplayBodyChange={setDisplayBody}
+        />
+      ) : null}
+
       <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border">
         <CodeMirror
-          value={bodyValue}
+          value={displayBody}
           editable={false}
           readOnly
           extensions={extensions}
