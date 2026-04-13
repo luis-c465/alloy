@@ -71,6 +71,7 @@ export default function App() {
   const [isShortcutPaletteOpen, setIsShortcutPaletteOpen] = useState(false);
   const allowWindowCloseRef = useRef(false);
   const initTheme = useThemeStore((state) => state.initTheme);
+  const initWorkspace = useWorkspaceStore((state) => state.initWorkspace);
 
   const openShortcutPalette = useCallback(() => {
     setIsShortcutPaletteOpen(true);
@@ -89,6 +90,10 @@ export default function App() {
   useEffect(() => {
     initTheme();
   }, [initTheme]);
+
+  useEffect(() => {
+    void initWorkspace();
+  }, [initWorkspace]);
 
   useEffect(() => {
     const unregisterDirtyPrompt = registerDirtyTabPromptHandler(

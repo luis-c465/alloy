@@ -14,6 +14,7 @@ interface WorkspaceStore {
   sidebarVisible: boolean;
   sidebarTab: SidebarTab;
   fileTree: FileEntry[];
+  initWorkspace: () => Promise<void>;
   setWorkspace: (path: string | null) => Promise<void>;
   setSidebarVisible: (visible: boolean) => void;
   setSidebarTab: (tab: SidebarTab) => void;
@@ -22,6 +23,19 @@ interface WorkspaceStore {
   setFileTree: (tree: FileEntry[]) => void;
   refreshFileTree: () => Promise<void>;
 }
+
+const LAST_WORKSPACE_KEY = "alloy-last-workspace";
+
+const isBrowser = (): boolean => typeof window !== "undefined";
+
+const readStoredWorkspacePath = (): string | null => {
+  if (!isBrowser()) {
+    return null;
+  }
+
+  const storedPath = window.localStorage.getItem(LAST_WORKSPACE_KEY);
+  return storedPath?.trim() ? storedPath : null;
+};
 
 const getWorkspaceName = (path: string): string => {
   const segments = path.split(/[\\/]/).filter(Boolean);
@@ -36,8 +50,27 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
   sidebarVisible: true,
   sidebarTab: SIDEBAR_TABS[0],
   fileTree: [],
+  initWorkspace: async () => {
+    const path = readStoredWorkspacePath();
+    if (!path) {
+      return;
+    }
+
+    try {
+      await api.workspace.ensure_workspace(path);
+      await get().setWorkspace(path);
+    } catch {
+      if (isBrowser()) {
+        window.localStorage.removeItem(LAST_WORKSPACE_KEY);
+      }
+    }
+  },
   setWorkspace: async (path) => {
     if (!path) {
+      if (isBrowser()) {
+        window.localStorage.removeItem(LAST_WORKSPACE_KEY);
+      }
+
       set({
         workspacePath: null,
         workspaceName: null,
@@ -46,6 +79,10 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
         fileTree: [],
       });
       return;
+    }
+
+    if (isBrowser()) {
+      window.localStorage.setItem(LAST_WORKSPACE_KEY, path);
     }
 
     set({
