@@ -129,6 +129,12 @@ const toResponse = (entry: HistoryEntry): HttpResponseData | null => {
       enabled,
     })),
     body: entry.response_body ?? "",
+    is_binary: false,
+    body_base64: null,
+    content_type:
+      toKeyValueList(entry.response_headers).find(
+        (header) => header.key.toLowerCase() === "content-type",
+      )?.value ?? "",
     size_bytes: entry.size_bytes ?? 0,
     time_ms: entry.time_ms ?? 0,
   };

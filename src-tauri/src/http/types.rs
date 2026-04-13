@@ -53,6 +53,9 @@ pub struct HttpResponseData {
     pub status_text: String,
     pub headers: Vec<KeyValue>,
     pub body: String,
+    pub is_binary: bool,
+    pub body_base64: Option<String>,
+    pub content_type: String,
     pub size_bytes: u64,
     pub time_ms: u64,
 }

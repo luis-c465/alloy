@@ -42,6 +42,7 @@ dependencies = [
 name = "alloy"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "handlebars",
  "reqwest 0.12.28",

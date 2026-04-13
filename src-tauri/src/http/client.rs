@@ -1,5 +1,6 @@
 use std::{path::Path, sync::LazyLock, time::Duration};
 
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use reqwest::{
     header::{HeaderName, HeaderValue, CONTENT_TYPE},
     multipart::{Form, Part},
@@ -14,6 +15,12 @@ use super::types::{
 };
 
 const MULTIPART_MEMORY_WARNING_BYTES: u64 = 100 * 1024 * 1024;
+const MAX_BINARY_BASE64_BYTES: usize = 5 * 1024 * 1024;
+
+pub struct ExecutedResponse {
+    pub response: HttpResponseData,
+    pub binary_body: Option<Vec<u8>>,
+}
 
 static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
@@ -107,6 +114,69 @@ fn resolve_upload_filename(path: &str, filename: Option<String>) -> Result<Strin
         })
 }
 
+fn normalize_content_type(value: &str) -> String {
+    value
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase()
+}
+
+fn is_textual_content_type(content_type: &str) -> bool {
+    let normalized = normalize_content_type(content_type);
+
+    normalized.starts_with("text/")
+        || normalized.ends_with("+json")
+        || normalized.ends_with("+xml")
+        || matches!(
+            normalized.as_str(),
+            "application/json"
+                | "application/xml"
+                | "application/javascript"
+                | "application/x-javascript"
+                | "application/x-www-form-urlencoded"
+                | "application/graphql-response+json"
+                | "application/problem+json"
+                | "application/ld+json"
+                | "application/yaml"
+                | "application/x-yaml"
+                | "application/xhtml+xml"
+                | "image/svg+xml"
+        )
+}
+
+fn looks_like_binary_data(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return false;
+    }
+
+    if bytes.contains(&0) {
+        return true;
+    }
+
+    let suspicious = bytes
+        .iter()
+        .filter(|byte| matches!(byte, 0x01..=0x08 | 0x0B | 0x0C | 0x0E..=0x1A | 0x1C..=0x1F))
+        .count();
+
+    suspicious * 10 > bytes.len()
+}
+
+fn should_treat_as_binary(content_type: &str, bytes: &[u8]) -> bool {
+    let normalized = normalize_content_type(content_type);
+
+    if normalized.is_empty() {
+        return looks_like_binary_data(bytes);
+    }
+
+    if is_textual_content_type(&normalized) {
+        return looks_like_binary_data(bytes);
+    }
+
+    true
+}
+
 async fn build_multipart_form(fields: Vec<MultipartField>) -> Result<Form, AppError> {
     let mut form = Form::new();
 
@@ -161,7 +231,7 @@ async fn build_multipart_form(fields: Vec<MultipartField>) -> Result<Form, AppEr
     Ok(form)
 }
 
-pub async fn execute_request(request: HttpRequestData) -> Result<HttpResponseData, AppError> {
+pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedResponse, AppError> {
     let HttpRequestData {
         method,
         url: raw_url,
@@ -265,6 +335,12 @@ pub async fn execute_request(request: HttpRequestData) -> Result<HttpResponseDat
 
     let status = response.status();
     let status_text = status.canonical_reason().unwrap_or("Unknown").to_string();
+    let content_type = response
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
 
     let headers = response
         .headers()
@@ -280,18 +356,32 @@ pub async fn execute_request(request: HttpRequestData) -> Result<HttpResponseDat
         .collect::<Vec<_>>();
 
     let content_length = response.content_length();
-    // TODO: For large payloads, stream/chunk the response body instead of buffering all text in memory.
-    // TODO: Detect binary content-types and handle with a non-text response path.
-    let body = response.text().await.map_err(map_reqwest_error)?;
-    let size_bytes = content_length.unwrap_or(body.len() as u64);
+    let bytes = response.bytes().await.map_err(map_reqwest_error)?;
+    let size_bytes = content_length.unwrap_or(bytes.len() as u64);
+    let is_binary = should_treat_as_binary(&content_type, &bytes);
 
-    Ok(HttpResponseData {
-        status: status.as_u16(),
-        status_text,
-        headers,
-        body,
-        size_bytes,
-        time_ms: elapsed_ms,
+    let body_base64 = (is_binary && bytes.len() <= MAX_BINARY_BASE64_BYTES)
+        .then(|| BASE64_STANDARD.encode(&bytes));
+
+    let body = if is_binary {
+        String::new()
+    } else {
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
+
+    Ok(ExecutedResponse {
+        response: HttpResponseData {
+            status: status.as_u16(),
+            status_text,
+            headers,
+            body,
+            is_binary,
+            body_base64,
+            content_type,
+            size_bytes,
+            time_ms: elapsed_ms,
+        },
+        binary_body: is_binary.then_some(bytes.to_vec()),
     })
 }
 
@@ -385,6 +475,44 @@ mod tests {
         path.to_string_lossy().into_owned()
     }
 
+    async fn spawn_binary_response_server(
+        content_type: &'static str,
+        body: &'static [u8],
+    ) -> SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("expected binary test listener to bind");
+        let address = listener
+            .local_addr()
+            .expect("expected binary test listener to have an address");
+
+        tokio::spawn(async move {
+            let (mut stream, _) = listener
+                .accept()
+                .await
+                .expect("expected incoming binary test connection");
+
+            let mut buffer = [0_u8; 1024];
+            let _ = stream.read(&mut buffer).await;
+
+            let response_head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+
+            stream
+                .write_all(response_head.as_bytes())
+                .await
+                .expect("expected binary response headers to write");
+            stream
+                .write_all(body)
+                .await
+                .expect("expected binary response body to write");
+        });
+
+        address
+    }
+
     #[tokio::test]
     async fn execute_request_get_httpbin_returns_200() {
         let request = HttpRequestData {
@@ -401,7 +529,7 @@ mod tests {
             .await
             .expect("expected a successful response from httpbin");
 
-        assert_eq!(response.status, 200);
+        assert_eq!(response.response.status, 200);
     }
 
     #[tokio::test]
@@ -447,7 +575,7 @@ mod tests {
             .expect("expected multipart request to be captured");
         let lowercased_request = captured_request.to_ascii_lowercase();
 
-        assert_eq!(response.status, 200);
+        assert_eq!(response.response.status, 200);
         assert!(lowercased_request.contains("content-type: multipart/form-data; boundary="));
         assert!(!lowercased_request.contains("content-type: application/json"));
         assert!(captured_request.contains("name=\"description\""));
@@ -496,6 +624,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn execute_request_binary_response_sets_base64_metadata() {
+        let address =
+            spawn_binary_response_server("image/png", b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR").await;
+
+        let request = HttpRequestData {
+            method: "GET".to_string(),
+            url: format!("http://{address}/image"),
+            headers: Vec::new(),
+            query_params: Vec::new(),
+            body: RequestBody::None,
+            timeout_ms: None,
+            skip_ssl_verification: false,
+        };
+
+        let response = execute_request(request)
+            .await
+            .expect("expected binary request to succeed");
+
+        assert!(response.response.is_binary);
+        assert_eq!(response.response.content_type, "image/png");
+        assert_eq!(response.response.body, "");
+        assert!(response.response.body_base64.is_some());
+        assert_eq!(
+            response.binary_body.as_deref(),
+            Some(&b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"[..])
+        );
+    }
+
+    #[tokio::test]
     #[ignore = "hits httpbin.org"]
     async fn execute_request_multipart_httpbin_returns_form_and_file_echo() {
         let file_path = create_temp_file("multipart from alloy").await;
@@ -530,9 +687,10 @@ mod tests {
             .await
             .expect("expected multipart request to succeed against httpbin");
 
-        assert_eq!(response.status, 200);
-        assert!(response.body.contains("\"name\": \"test\""));
+        assert_eq!(response.response.status, 200);
+        assert!(response.response.body.contains("\"name\": \"test\""));
         assert!(response
+            .response
             .body
             .contains("\"avatar\": \"multipart from alloy\""));
 

@@ -4,13 +4,17 @@ use crate::{
     history::{db::HistoryDb, types::HistoryEntry},
     http::{
         self,
+        client::ExecutedResponse,
         types::{HttpRequestData, HttpResponseData, KeyValue, MultipartField, RequestBody},
     },
 };
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use chrono::Utc;
 use handlebars::Handlebars;
 use std::{collections::HashMap, path::Path, sync::Arc};
-use tokio::sync::OnceCell;
+use tauri::{AppHandle, Wry};
+use tauri_plugin_dialog::DialogExt;
+use tokio::sync::{Mutex, OnceCell};
 
 #[taurpc::procedures(export_to = "../src/bindings.ts")]
 pub trait Api {
@@ -20,12 +24,18 @@ pub trait Api {
         environment_name: Option<String>,
         workspace_path: Option<String>,
     ) -> Result<HttpResponseData, AppError>;
+    async fn save_response_to_file(
+        body_base64: Option<String>,
+        suggested_filename: Option<String>,
+    ) -> Result<bool, AppError>;
 }
 
 #[derive(Clone)]
 pub struct ApiImpl {
     pub db: Arc<OnceCell<Arc<HistoryDb>>>,
+    pub app_handle: Arc<OnceCell<AppHandle<Wry>>>,
     pub hbs: Arc<Handlebars<'static>>,
+    pub last_binary_response: Arc<Mutex<Option<Vec<u8>>>>,
 }
 
 impl ApiImpl {
@@ -58,6 +68,13 @@ impl ApiImpl {
                     .to_string(),
             )),
         }
+    }
+
+    fn app_handle(&self) -> Result<AppHandle<Wry>, AppError> {
+        self.app_handle
+            .get()
+            .cloned()
+            .ok_or_else(|| AppError::RequestError("App handle is not initialized".to_string()))
     }
 
     async fn try_insert_history(
@@ -111,7 +128,12 @@ impl Api for ApiImpl {
         let request_for_history = resolved_request;
         let request_for_send = clone_request(&request_for_history);
 
-        let response = http::client::execute_request(request_for_send).await?;
+        let ExecutedResponse {
+            response,
+            binary_body,
+        } = http::client::execute_request(request_for_send).await?;
+
+        *self.last_binary_response.lock().await = binary_body;
 
         if let Err(error) = self
             .try_insert_history(&request_for_history, &response)
@@ -121,6 +143,60 @@ impl Api for ApiImpl {
         }
 
         Ok(response)
+    }
+
+    async fn save_response_to_file(
+        self,
+        body_base64: Option<String>,
+        suggested_filename: Option<String>,
+    ) -> Result<bool, AppError> {
+        let bytes = if let Some(body_base64) = body_base64.filter(|value| !value.is_empty()) {
+            BASE64_STANDARD.decode(body_base64).map_err(|error| {
+                AppError::ParseError(format!("Invalid response body base64: {error}"))
+            })?
+        } else {
+            self.last_binary_response
+                .lock()
+                .await
+                .clone()
+                .ok_or_else(|| {
+                    AppError::RequestError("No binary response is available to save".to_string())
+                })?
+        };
+
+        let app_handle = self.app_handle()?;
+        let suggested_filename = suggested_filename
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "response.bin".to_string());
+
+        let file_path = tokio::task::spawn_blocking(move || {
+            app_handle
+                .dialog()
+                .file()
+                .set_file_name(&suggested_filename)
+                .blocking_save_file()
+        })
+        .await
+        .map_err(|error| AppError::RequestError(format!("Failed to open save dialog: {error}")))?;
+
+        let Some(file_path) = file_path else {
+            return Ok(false);
+        };
+
+        let path = file_path.into_path().map_err(|error| {
+            AppError::RequestError(format!(
+                "Selected save location is not a local path: {error}"
+            ))
+        })?;
+
+        tokio::fs::write(&path, bytes).await.map_err(|error| {
+            AppError::IoError(format!(
+                "Failed to save response to {}: {error}",
+                path.display()
+            ))
+        })?;
+
+        Ok(true)
     }
 }
 

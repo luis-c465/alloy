@@ -31,6 +31,13 @@ export const sendRequestWithEnv = async (
   return api.send_request_with_env(data, environmentName, workspacePath);
 };
 
+export const saveResponseToFile = async (
+  bodyBase64: string | null,
+  suggestedFilename: string | null,
+): Promise<boolean> => {
+  return api.save_response_to_file(bodyBase64, suggestedFilename);
+};
+
 export const pickWorkspaceFolder = async (): Promise<string | null> => {
   return api.workspace.pick_workspace_folder();
 };

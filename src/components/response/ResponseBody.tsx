@@ -7,6 +7,7 @@ import { keymap } from "@codemirror/view";
 import CodeMirror from "@uiw/react-codemirror";
 import { useEffect, useMemo, useState } from "react";
 
+import { BinaryPreview } from "~/components/response/BinaryPreview";
 import { JsonFilter } from "~/components/response/JsonFilter";
 import { useActiveTabField } from "~/hooks/useActiveTab";
 
@@ -26,8 +27,13 @@ const formatBytes = (bytes: number): string => {
 };
 
 const getContentType = (
+  contentType: string | undefined,
   headers: Array<{ key: string; value: string }> | undefined,
 ): string => {
+  if (contentType?.trim()) {
+    return contentType.toLowerCase();
+  }
+
   if (!headers) {
     return "";
   }
@@ -38,8 +44,47 @@ const getContentType = (
   return match?.value.toLowerCase() ?? "";
 };
 
+const guessExtension = (contentType: string): string => {
+  const normalized = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
+
+  switch (normalized) {
+    case "image/png":
+      return ".png";
+    case "image/jpeg":
+      return ".jpg";
+    case "image/gif":
+      return ".gif";
+    case "image/webp":
+      return ".webp";
+    case "application/pdf":
+      return ".pdf";
+    case "application/zip":
+      return ".zip";
+    case "application/octet-stream":
+      return ".bin";
+    default:
+      return "";
+  }
+};
+
+const getSuggestedFilename = (urlValue: string, contentType: string): string => {
+  try {
+    const parsed = new URL(urlValue);
+    const segment = parsed.pathname.split("/").filter(Boolean).pop();
+
+    if (segment) {
+      return decodeURIComponent(segment);
+    }
+  } catch {
+    // Ignore invalid URLs and fall back to a generic filename.
+  }
+
+  return `response${guessExtension(contentType) || ".bin"}`;
+};
+
 export function ResponseBody() {
   const response = useActiveTabField("response", null);
+  const requestUrl = useActiveTabField("url", "");
   const [isDark, setIsDark] = useState(false);
   const [displayBody, setDisplayBody] = useState("");
 
@@ -54,12 +99,19 @@ export function ResponseBody() {
     return () => observer.disconnect();
   }, []);
 
-  const contentType = useMemo(() => getContentType(response?.headers), [response]);
+  const contentType = useMemo(
+    () => getContentType(response?.content_type, response?.headers),
+    [response],
+  );
   const body = response?.body ?? "";
   const bodyBytes = useMemo(() => new Blob([body]).size, [body]);
   const isTruncated = bodyBytes > MAX_PREVIEW_BYTES;
   const previewBody = isTruncated ? body.slice(0, MAX_PREVIEW_BYTES) : body;
   const isJsonContent = contentType.includes("application/json");
+  const suggestedFilename = useMemo(
+    () => getSuggestedFilename(requestUrl, response?.content_type ?? contentType),
+    [contentType, requestUrl, response?.content_type],
+  );
 
   const parsedJsonBody = useMemo(() => {
     if (!isJsonContent) {
@@ -102,7 +154,26 @@ export function ResponseBody() {
     return [...languageExtensions, search(), keymap.of(searchKeymap)];
   }, [contentType, isJsonContent]);
 
-  if (!response || !body) {
+  if (!response) {
+    return (
+      <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
+        No response body
+      </div>
+    );
+  }
+
+  if (response.is_binary) {
+    return (
+      <BinaryPreview
+        bodyBase64={response.body_base64}
+        contentType={response.content_type || contentType}
+        sizeBytes={response.size_bytes}
+        suggestedFilename={suggestedFilename}
+      />
+    );
+  }
+
+  if (!body) {
     return (
       <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
         No response body

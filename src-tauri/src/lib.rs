@@ -17,13 +17,14 @@ use specta_typescript::{BigIntExportBehavior, Typescript};
 use std::sync::Arc;
 use tauri::Manager;
 use taurpc::Router;
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, OnceCell};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
     let db = Arc::new(OnceCell::<Arc<HistoryDb>>::new());
     let app_handle = Arc::new(OnceCell::<tauri::AppHandle<tauri::Wry>>::new());
     let hbs = Arc::new(resolver::create_resolver());
+    let last_binary_response = Arc::new(Mutex::new(None));
 
     let router = Router::new()
         .export_config(
@@ -34,7 +35,9 @@ pub async fn run() {
         .merge(
             ApiImpl {
                 db: db.clone(),
+                app_handle: app_handle.clone(),
                 hbs: hbs.clone(),
+                last_binary_response: last_binary_response.clone(),
             }
             .into_handler(),
         )
