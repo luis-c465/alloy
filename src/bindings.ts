@@ -29,9 +29,9 @@ export type HttpResponseData = { status: number; status_text: string; headers: K
 
 export type KeyValue = { key: string; value: string; enabled: boolean }
 
-export type MultipartValue = { Text: string } | { File: { path: string; filename: string | null } }
-
 export type MultipartField = { key: string; value: MultipartValue; content_type: string | null; enabled: boolean }
+
+export type MultipartValue = { Text: string } | { File: { path: string; filename: string | null } }
 
 export type PickedFile = { path: string; name: string; size_bytes: number | null }
 

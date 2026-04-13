@@ -24,6 +24,12 @@ import {
 
 type MultipartValueType = "text" | "file";
 
+// Stable empty array fallback for useRequestStore selectors. Returning an
+// inline `?? []` literal inside a Zustand selector creates a new array reference
+// on every call, which causes React's useSyncExternalStore to detect a spurious
+// change and trigger an infinite re-render loop.
+const EMPTY_MULTIPART_FIELDS: MultipartField[] = [];
+
 const createEmptyRow = (): MultipartField => ({
   key: "",
   value: { Text: "" },
@@ -108,7 +114,7 @@ const detectContentType = (fileName: string): string | null => {
 export function MultipartEditor() {
   const items = useRequestStore((state) => state.tabs.find(
     (tab) => tab.id === (state.activeTabId ?? state.tabs[0]?.id),
-  )?.multipartFields ?? []);
+  )?.multipartFields ?? EMPTY_MULTIPART_FIELDS);
   const setMultipartFields = useRequestStore((state) => state.setMultipartFields);
   const rows = items.length > 0 ? items : [createEmptyRow()];
 

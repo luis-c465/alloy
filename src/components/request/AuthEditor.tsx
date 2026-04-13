@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
+import type { KeyValue } from "~/bindings";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 import {
   encodeBase64Utf8,
@@ -19,6 +20,12 @@ const AUTH_TYPE_OPTIONS: Array<{ value: AuthType; label: string }> = [
   { value: "bearer", label: "Bearer Token" },
   { value: "basic", label: "Basic Auth" },
 ];
+
+// Stable empty array fallback for useWorkspaceStore selectors. Returning an
+// inline `?? []` literal inside a Zustand selector creates a new array reference
+// on every call, which causes React's useSyncExternalStore to detect a spurious
+// change and trigger an infinite re-render loop.
+const EMPTY_ENV_VARIABLES: KeyValue[] = [];
 
 export function AuthEditor() {
   const activeTab = useRequestStore((state) => {
@@ -42,7 +49,7 @@ export function AuthEditor() {
     const activeName = state.activeEnvironment;
 
     return state.environments.find((environment) => environment.name === activeName)
-      ?.variables ?? [];
+      ?.variables ?? EMPTY_ENV_VARIABLES;
   });
   const [showPassword, setShowPassword] = useState(false);
 
