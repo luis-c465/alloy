@@ -38,6 +38,16 @@ export const saveResponseToFile = async (
   return api.save_response_to_file(bodyBase64, suggestedFilename);
 };
 
+export const exportCurl = async (request: HttpRequestData): Promise<string> => {
+  return api.import_export.export_curl(request);
+};
+
+export const importCurl = async (
+  curlCommand: string,
+): Promise<HttpRequestData> => {
+  return api.import_export.import_curl(curlCommand);
+};
+
 export const pickWorkspaceFolder = async (): Promise<string | null> => {
   return api.workspace.pick_workspace_folder();
 };

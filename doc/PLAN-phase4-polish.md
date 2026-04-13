@@ -205,6 +205,8 @@ This phase is primarily frontend-focused. Most features add UI capabilities that
 
 ### Step 3: cURL Import & Export
 
+> **Updated by Step 3 executor:** Implementation also required `src-tauri/Cargo.toml` (for the `url` crate), `src/lib/api.ts`, and regenerated `src/bindings.ts` so the new TauRPC router is callable from the frontend.
+
 **Objective:** Allow users to export the current request as a cURL command and import a cURL command to create a new request tab.
 
 **Context:**
@@ -216,10 +218,13 @@ This phase is primarily frontend-focused. Most features add UI capabilities that
 - Create: `src-tauri/src/import_export/mod.rs`
 - Create: `src-tauri/src/import_export/curl.rs`
 - Create: `src-tauri/src/commands/import_export.rs`
+- Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/src/commands/mod.rs`
 - Modify: `src-tauri/src/lib.rs` (add module, merge router)
 - Create: `src/components/import-export/CurlImportDialog.tsx`
 - Create: `src/components/import-export/CurlExportDialog.tsx`
+- Modify: `src/lib/api.ts`
+- Modify: `src/bindings.ts`
 - Modify: `src/components/layout/Toolbar.tsx` (add import/export menu)
 
 **Sub-tasks:**
@@ -293,6 +298,8 @@ This phase is primarily frontend-focused. Most features add UI capabilities that
 - **cURL from browser:** Chrome DevTools "Copy as cURL" uses a specific format. Test compatibility with Chrome-exported cURL commands.
 - **Auth header generation:** If the request has auth presets (Bearer/Basic from Phase 3), the export should include the Authorization header. The import should detect `-u user:pass` and map it to basic auth.
 - **Environment variables in export:** If the URL contains `{{variables}}`, the export should resolve them (export the concrete command) OR leave them as-is with a note. For v1: resolve variables in the export.
+
+> **Updated by Step 3 executor:** Imported `Authorization` headers are also mapped back into the frontend Auth tab when they are recognizable Bearer or Basic credentials, so import/export round-trips preserve the Phase 3 auth UX instead of leaving those values only in raw headers.
 
 **Verification:**
 - Export a POST request with JSON body → valid, runnable cURL command.

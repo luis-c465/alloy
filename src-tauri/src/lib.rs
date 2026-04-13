@@ -3,12 +3,14 @@ mod environment;
 mod error;
 mod history;
 mod http;
+mod import_export;
 mod workspace;
 
 use commands::{
     environment::{EnvironmentApi, EnvironmentApiImpl},
     history::{HistoryApi, HistoryApiImpl},
     http::{Api, ApiImpl},
+    import_export::{ImportExportApi, ImportExportApiImpl},
     workspace::{WorkspaceApi, WorkspaceApiImpl},
 };
 use environment::resolver;
@@ -47,6 +49,7 @@ pub async fn run() {
             }
             .into_handler(),
         )
+        .merge(ImportExportApiImpl.into_handler())
         .merge(EnvironmentApiImpl { hbs: hbs.clone() }.into_handler())
         .merge(HistoryApiImpl { db: db.clone() }.into_handler());
 
