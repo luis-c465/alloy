@@ -2,6 +2,7 @@ import { BodyEditor } from "~/components/request/BodyEditor";
 import { HeadersEditor } from "~/components/request/HeadersEditor";
 import { MethodSelector } from "~/components/request/MethodSelector";
 import { ParamsEditor } from "~/components/request/ParamsEditor";
+import { ResolvedUrlPreview } from "~/components/request/ResolvedUrlPreview";
 import { SendButton } from "~/components/request/SendButton";
 import { UrlBar } from "~/components/request/UrlBar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -21,6 +22,8 @@ export function RequestPanel() {
         <UrlBar />
         <SendButton />
       </div>
+
+      <ResolvedUrlPreview />
 
       <div className="min-h-0 flex-1 border-t border-border p-3">
         <Tabs

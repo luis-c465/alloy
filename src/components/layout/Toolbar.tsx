@@ -6,6 +6,7 @@ import {
   IconSettings,
 } from "@tabler/icons-react";
 
+import { EnvironmentSelector } from "~/components/environment/EnvironmentSelector";
 import { OpenWorkspaceDialog } from "~/components/workspace/OpenWorkspaceDialog";
 import { Button } from "~/components/ui/button";
 import {
@@ -92,17 +93,7 @@ export function Toolbar({
           <OpenWorkspaceDialog label="Open Workspace" />
         )}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" size="sm" className="h-7">
-              Env: None
-              <IconChevronDown className="size-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
-            <DropdownMenuItem disabled>No environments yet</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <EnvironmentSelector />
 
         <Button
           type="button"

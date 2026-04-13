@@ -1,0 +1,128 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { IconChevronDown } from "@tabler/icons-react";
+
+import { EnvironmentEditor } from "~/components/environment/EnvironmentEditor";
+import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { listEnvironments, setActiveEnvironment as setActiveEnvironmentApi } from "~/lib/api";
+import { useWorkspaceStore } from "~/stores/workspace-store";
+
+export function EnvironmentSelector() {
+  const workspacePath = useWorkspaceStore((state) => state.workspacePath);
+  const environments = useWorkspaceStore((state) => state.environments);
+  const activeEnvironment = useWorkspaceStore((state) => state.activeEnvironment);
+  const setEnvironments = useWorkspaceStore((state) => state.setEnvironments);
+  const setActiveEnvironment = useWorkspaceStore((state) => state.setActiveEnvironment);
+
+  const [editorOpen, setEditorOpen] = useState(false);
+
+  const refreshEnvironments = useCallback(async () => {
+    if (!workspacePath) {
+      setEnvironments([]);
+      setActiveEnvironment(null);
+      return;
+    }
+
+    const result = await listEnvironments(workspacePath);
+    setEnvironments(result.environments);
+    setActiveEnvironment(result.active);
+  }, [setActiveEnvironment, setEnvironments, workspacePath]);
+
+  useEffect(() => {
+    void refreshEnvironments();
+  }, [refreshEnvironments]);
+
+  const activeLabel = useMemo(() => {
+    if (!workspacePath) {
+      return "No Workspace";
+    }
+
+    return activeEnvironment ?? "No Environment";
+  }, [activeEnvironment, workspacePath]);
+
+  const handleSwitchEnvironment = async (name: string | null) => {
+    if (!workspacePath) {
+      return;
+    }
+
+    const previous = activeEnvironment;
+    setActiveEnvironment(name);
+
+    try {
+      await setActiveEnvironmentApi(workspacePath, name);
+    } catch {
+      setActiveEnvironment(previous);
+    }
+  };
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7"
+            disabled={!workspacePath}
+          >
+            Env: {activeLabel}
+            <IconChevronDown className="size-3" />
+          </Button>
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent align="end" className="w-52">
+          {environments.length > 0 ? (
+            environments.map((environment) => (
+              <DropdownMenuItem
+                key={environment.name}
+                onSelect={() => {
+                  void handleSwitchEnvironment(environment.name);
+                }}
+              >
+                {environment.name}
+              </DropdownMenuItem>
+            ))
+          ) : (
+            <DropdownMenuItem disabled>No environments</DropdownMenuItem>
+          )}
+
+          <DropdownMenuItem
+            onSelect={() => {
+              void handleSwitchEnvironment(null);
+            }}
+          >
+            No Environment
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            onSelect={() => {
+              setEditorOpen(true);
+            }}
+            disabled={!workspacePath}
+          >
+            Manage Environments
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <EnvironmentEditor
+        open={editorOpen}
+        onOpenChange={(open) => {
+          setEditorOpen(open);
+          if (!open) {
+            void refreshEnvironments();
+          }
+        }}
+      />
+    </>
+  );
+}
