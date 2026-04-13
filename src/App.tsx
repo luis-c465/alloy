@@ -31,6 +31,7 @@ import {
   type Tab,
   useRequestStore,
 } from "~/stores/request-store";
+import { useThemeStore } from "~/stores/theme-store";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
 type DirtyPromptState =
@@ -99,6 +100,7 @@ export default function App() {
   const [saveAsState, setSaveAsState] = useState<SaveAsState>(null);
   const [isShortcutPaletteOpen, setIsShortcutPaletteOpen] = useState(false);
   const allowWindowCloseRef = useRef(false);
+  const initTheme = useThemeStore((state) => state.initTheme);
 
   const openShortcutPalette = useCallback(() => {
     setIsShortcutPaletteOpen(true);
@@ -113,6 +115,10 @@ export default function App() {
     onOpenPalette: openShortcutPalette,
     onClosePalette: closeShortcutPalette,
   });
+
+  useEffect(() => {
+    initTheme();
+  }, [initTheme]);
 
   useEffect(() => {
     const unregisterDirtyPrompt = registerDirtyTabPromptHandler(

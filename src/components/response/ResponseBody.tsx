@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BinaryPreview } from "~/components/response/BinaryPreview";
 import { JsonFilter } from "~/components/response/JsonFilter";
 import { useActiveTabField } from "~/hooks/useActiveTab";
+import { useThemeStore } from "~/stores/theme-store";
 
 const MAX_PREVIEW_BYTES = 1024 * 1024;
 
@@ -85,19 +86,8 @@ const getSuggestedFilename = (urlValue: string, contentType: string): string => 
 export function ResponseBody() {
   const response = useActiveTabField("response", null);
   const requestUrl = useActiveTabField("url", "");
-  const [isDark, setIsDark] = useState(false);
+  const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const [displayBody, setDisplayBody] = useState("");
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const syncTheme = () => setIsDark(root.classList.contains("dark"));
-    syncTheme();
-
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
-
-    return () => observer.disconnect();
-  }, []);
 
   const contentType = useMemo(
     () => getContentType(response?.content_type, response?.headers),
@@ -210,7 +200,7 @@ export function ResponseBody() {
             foldGutter: true,
             autocompletion: false,
           }}
-          theme={isDark ? oneDark : "light"}
+          theme={resolvedTheme === "dark" ? oneDark : "light"}
         />
       </div>
     </div>

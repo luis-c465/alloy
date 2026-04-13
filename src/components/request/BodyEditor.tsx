@@ -3,7 +3,7 @@ import { html } from "@codemirror/lang-html";
 import { xml } from "@codemirror/lang-xml";
 import { oneDark } from "@codemirror/theme-one-dark";
 import CodeMirror from "@uiw/react-codemirror";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 
 import { KeyValueEditor } from "~/components/request/KeyValueEditor";
 import { MultipartEditor } from "~/components/request/MultipartEditor";
@@ -17,6 +17,7 @@ import {
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { cn } from "~/lib/utils";
 import { useRequestStore } from "~/stores/request-store";
+import { useThemeStore } from "~/stores/theme-store";
 
 const BODY_TYPE_OPTIONS = [
   { value: "none", label: "None" },
@@ -42,18 +43,7 @@ export function BodyEditor() {
   const setBodyContent = useRequestStore((state) => state.setBodyContent);
   const setBodyFormData = useRequestStore((state) => state.setBodyFormData);
   const setRawContentType = useRequestStore((state) => state.setRawContentType);
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const syncTheme = () => setIsDark(root.classList.contains("dark"));
-    syncTheme();
-
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
-
-    return () => observer.disconnect();
-  }, []);
+  const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
 
   const rawNormalized = useMemo(() => {
     return RAW_TYPE_OPTIONS.some((option) => option.value === rawContentType)
@@ -154,7 +144,7 @@ export function BodyEditor() {
               foldGutter: true,
               autocompletion: true,
             }}
-            theme={isDark ? oneDark : "light"}
+            theme={resolvedTheme === "dark" ? oneDark : "light"}
           />
         </div>
       ) : null}
@@ -172,7 +162,7 @@ export function BodyEditor() {
               foldGutter: true,
               autocompletion: true,
             }}
-            theme={isDark ? oneDark : "light"}
+            theme={resolvedTheme === "dark" ? oneDark : "light"}
           />
         </div>
       ) : null}
