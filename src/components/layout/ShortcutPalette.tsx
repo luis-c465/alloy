@@ -1,4 +1,8 @@
 import {
+  getHotkeyManager,
+  useHotkeyRegistrations,
+} from "@tanstack/react-hotkeys";
+import {
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -7,26 +11,31 @@ import {
   CommandList,
   CommandShortcut,
 } from "~/components/ui/command";
-import {
-  type Shortcut,
-  getShortcutDisplayLabel,
-} from "~/lib/shortcuts";
+import { CATEGORY_ORDER, formatForDisplay, type ShortcutCategory } from "~/lib/shortcuts";
 
 type ShortcutPaletteProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  shortcuts: Shortcut[];
 };
 
 export function ShortcutPalette({
   open,
   onOpenChange,
-  shortcuts,
 }: ShortcutPaletteProps) {
-  const shortcutsByCategory = shortcuts.reduce<Map<string, Shortcut[]>>((groups, shortcut) => {
-    const categoryShortcuts = groups.get(shortcut.category) ?? [];
+  const { hotkeys } = useHotkeyRegistrations();
+  const hotkeyManager = getHotkeyManager();
+
+  const shortcutsByCategory = hotkeys.reduce<
+    Map<ShortcutCategory, Array<(typeof hotkeys)[number]>>
+  >((groups, shortcut) => {
+    const category = shortcut.options.meta?.category;
+    if (!category) {
+      return groups;
+    }
+
+    const categoryShortcuts = groups.get(category) ?? [];
     categoryShortcuts.push(shortcut);
-    groups.set(shortcut.category, categoryShortcuts);
+    groups.set(category, categoryShortcuts);
     return groups;
   }, new Map());
 
@@ -42,33 +51,40 @@ export function ShortcutPalette({
       <CommandList>
         <CommandEmpty>No shortcuts found.</CommandEmpty>
 
-        {Array.from(shortcutsByCategory.entries()).map(([category, categoryShortcuts]) => (
-          <CommandGroup key={category} heading={category}>
-            {categoryShortcuts.map((shortcut) => (
-              <CommandItem
-                key={shortcut.id}
-                value={`${shortcut.label} ${shortcut.description} ${shortcut.keys.join(" ")}`}
-                onSelect={() => {
-                  onOpenChange(false);
-                  shortcut.action();
-                }}
-                className="items-start"
-              >
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate font-medium text-foreground">
-                    {shortcut.label}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {shortcut.description}
-                  </span>
-                </div>
-                <CommandShortcut>
-                  {getShortcutDisplayLabel(shortcut.keys[0] ?? "")}
-                </CommandShortcut>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
+        {CATEGORY_ORDER.map((category) => {
+          const categoryShortcuts = shortcutsByCategory.get(category) ?? [];
+          if (categoryShortcuts.length === 0) {
+            return null;
+          }
+
+          return (
+            <CommandGroup key={category} heading={category}>
+              {categoryShortcuts.map((shortcut) => (
+                <CommandItem
+                  key={shortcut.id}
+                  value={`${shortcut.options.meta?.name ?? shortcut.hotkey} ${shortcut.options.meta?.description ?? ""} ${shortcut.hotkey}`}
+                  onSelect={() => {
+                    onOpenChange(false);
+                    hotkeyManager.triggerRegistration(shortcut.id);
+                  }}
+                  className="items-start"
+                >
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate font-medium text-foreground">
+                      {shortcut.options.meta?.name ?? shortcut.hotkey}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {shortcut.options.meta?.description}
+                    </span>
+                  </div>
+                  <CommandShortcut>
+                    {formatForDisplay(shortcut.hotkey)}
+                  </CommandShortcut>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          );
+        })}
       </CommandList>
     </CommandDialog>
   );

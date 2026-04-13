@@ -3,7 +3,8 @@ import {
   IconFolderPlus,
   IconRefresh,
 } from "@tabler/icons-react";
-import { useMemo, useState } from "react";
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { useMemo, useRef, useState } from "react";
 
 import type { FileEntry } from "~/bindings";
 import { OpenWorkspaceDialog } from "~/components/workspace/OpenWorkspaceDialog";
@@ -114,6 +115,8 @@ export function CollectionsPanel() {
   const [renameDraft, setRenameDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+
+  const createInputRef = useRef<HTMLInputElement>(null);
 
   const selectedEntry = useMemo(() => {
     if (!selectedPath) {
@@ -339,6 +342,32 @@ export function CollectionsPanel() {
     setRenameDraft("");
   };
 
+  useHotkey(
+    "Enter",
+    (event: KeyboardEvent) => {
+      event.preventDefault();
+      void handleCreateSubmit();
+    },
+    {
+      enabled: createMode !== null,
+      target: createInputRef,
+      ignoreInputs: false,
+    },
+  );
+
+  useHotkey(
+    "Escape",
+    (event: KeyboardEvent) => {
+      event.preventDefault();
+      cancelCreate();
+    },
+    {
+      enabled: createMode !== null,
+      target: createInputRef,
+      ignoreInputs: false,
+    },
+  );
+
   if (!workspacePath) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
@@ -403,22 +432,12 @@ export function CollectionsPanel() {
       {createMode ? (
         <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
           <Input
+            ref={createInputRef}
             value={createName}
             autoFocus
             className="h-6"
             onChange={(event) => {
               setCreateName(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void handleCreateSubmit();
-              }
-
-              if (event.key === "Escape") {
-                event.preventDefault();
-                cancelCreate();
-              }
             }}
           />
           <Button

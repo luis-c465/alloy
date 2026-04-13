@@ -5,7 +5,8 @@ import {
   IconFolder,
   IconFolderOpen,
 } from "@tabler/icons-react";
-import { useMemo, useState, type MouseEvent } from "react";
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { useMemo, useRef, useState, type MouseEvent } from "react";
 
 import type { FileEntry } from "~/bindings";
 import { Input } from "~/components/ui/input";
@@ -57,6 +58,7 @@ export function FileTreeNode({
   const [contextMenuPosition, setContextMenuPosition] =
     useState<{ x: number; y: number } | null>(null);
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const isDirectory = entry.is_dir;
   const isRenaming = renamingPath === entry.path;
@@ -71,6 +73,32 @@ export function FileTreeNode({
     setContextMenuPosition({ x: event.clientX, y: event.clientY });
     setIsContextMenuOpen(true);
   };
+
+  useHotkey(
+    "Enter",
+    (event: KeyboardEvent) => {
+      event.preventDefault();
+      onSubmitRename();
+    },
+    {
+      enabled: isRenaming,
+      target: renameInputRef,
+      ignoreInputs: false,
+    },
+  );
+
+  useHotkey(
+    "Escape",
+    (event: KeyboardEvent) => {
+      event.preventDefault();
+      onCancelRename();
+    },
+    {
+      enabled: isRenaming,
+      target: renameInputRef,
+      ignoreInputs: false,
+    },
+  );
 
   return (
     <div className="min-w-0">
@@ -102,6 +130,7 @@ export function FileTreeNode({
 
         {isRenaming ? (
           <Input
+            ref={renameInputRef}
             value={renameDraft}
             autoFocus
             className="h-6 w-full"
@@ -114,17 +143,6 @@ export function FileTreeNode({
             onContextMenu={handleContextMenu}
             onBlur={() => {
               onSubmitRename();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onSubmitRename();
-              }
-
-              if (event.key === "Escape") {
-                event.preventDefault();
-                onCancelRename();
-              }
             }}
           />
         ) : (

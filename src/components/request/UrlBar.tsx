@@ -1,4 +1,6 @@
-import type { KeyboardEvent } from "react";
+import { useRef } from "react";
+
+import { useHotkey } from "@tanstack/react-hotkeys";
 
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { Input } from "~/components/ui/input";
@@ -11,24 +13,20 @@ export function UrlBar() {
     (state) => state.syncUrlToQueryParams,
   );
   const sendRequest = useRequestStore((state) => state.sendRequest);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (value: string) => {
     setUrl(value);
     syncUrlToQueryParams();
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.ctrlKey &&
-      !event.altKey &&
-      !event.metaKey
-    ) {
-      event.preventDefault();
+  useHotkey(
+    "Enter",
+    () => {
       void sendRequest();
-    }
-  };
+    },
+    { target: inputRef, ignoreInputs: false, preventDefault: true },
+  );
 
   return (
     <Input
@@ -36,7 +34,7 @@ export function UrlBar() {
       value={url}
       placeholder="Enter request URL..."
       onChange={(event) => handleChange(event.target.value)}
-      onKeyDown={handleKeyDown}
+      ref={inputRef}
       className="h-8 flex-1 font-mono text-sm"
     />
   );

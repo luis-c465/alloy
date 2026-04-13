@@ -110,7 +110,7 @@ export default function App() {
     setIsShortcutPaletteOpen(false);
   }, []);
 
-  const { shortcuts } = useShortcuts({
+  useShortcuts({
     isPaletteOpen: isShortcutPaletteOpen,
     onOpenPalette: openShortcutPalette,
     onClosePalette: closeShortcutPalette,
@@ -357,7 +357,6 @@ export default function App() {
       <ShortcutPalette
         open={isShortcutPaletteOpen}
         onOpenChange={setIsShortcutPaletteOpen}
-        shortcuts={shortcuts}
       />
 
       <Dialog

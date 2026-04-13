@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useHotkeys, type UseHotkeyDefinition } from "@tanstack/react-hotkeys";
 
 import { setActiveEnvironment as setActiveEnvironmentApi } from "~/lib/api";
-import {
-  type Shortcut,
-  shortcutRegistry,
-  isMacPlatform,
-} from "~/lib/shortcuts";
+import type { ShortcutCategory } from "~/lib/shortcuts";
 import { useRequestStore } from "~/stores/request-store";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
@@ -13,12 +10,6 @@ type UseShortcutsOptions = {
   isPaletteOpen: boolean;
   onOpenPalette: () => void;
   onClosePalette: () => void;
-};
-
-type UseShortcutsResult = {
-  shortcuts: Shortcut[];
-  registerShortcut: (shortcut: Shortcut) => () => void;
-  unregisterShortcut: (id: string) => void;
 };
 
 const focusUrlBar = (): boolean => {
@@ -94,163 +85,129 @@ const activateAdjacentTab = (direction: -1 | 1): boolean => {
   return true;
 };
 
+const createShortcut = (
+  hotkey: UseHotkeyDefinition["hotkey"],
+  callback: UseHotkeyDefinition["callback"],
+  category: ShortcutCategory,
+  name: string,
+  description: string,
+  enabled = true,
+): UseHotkeyDefinition => ({
+  hotkey,
+  callback,
+  options: {
+    enabled,
+    meta: {
+      category,
+      description,
+      name,
+    },
+  },
+});
+
 export function useShortcuts({
   isPaletteOpen,
   onOpenPalette,
   onClosePalette,
-}: UseShortcutsOptions): UseShortcutsResult {
-  const [shortcuts, setShortcuts] = useState<Shortcut[]>(() => shortcutRegistry.getAll());
-
-  const registerShortcut = useCallback((shortcut: Shortcut) => {
-    shortcutRegistry.register(shortcut);
-
-    return () => {
-      shortcutRegistry.unregister(shortcut.id);
-    };
-  }, []);
-
-  const unregisterShortcut = useCallback((id: string) => {
-    shortcutRegistry.unregister(id);
-  }, []);
-
-  useEffect(() => shortcutRegistry.subscribe(() => {
-    setShortcuts(shortcutRegistry.getAll());
-  }), []);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      shortcutRegistry.handle(event);
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
-
-  const primaryModifier = useMemo(() => (isMacPlatform() ? "Cmd" : "Ctrl"), []);
-
-  const defaultShortcuts = useMemo<Shortcut[]>(() => ([
-    {
-      id: "send-request",
-      label: "Send Request",
-      description: "Send the active request",
-      keys: [`${primaryModifier}+Enter`],
-      category: "Request",
-      action: () => {
+}: UseShortcutsOptions): void {
+  const defaultShortcuts = useMemo<UseHotkeyDefinition[]>(() => ([
+    createShortcut(
+      "Mod+Enter",
+      () => {
         void useRequestStore.getState().sendRequest();
       },
-    },
-    {
-      id: "save-tab",
-      label: "Save Tab",
-      description: "Save the active request tab",
-      keys: [`${primaryModifier}+S`],
-      category: "Edit",
-      action: () => {
+      "Request",
+      "Send Request",
+      "Send the active request",
+    ),
+    createShortcut(
+      "Mod+S",
+      () => {
         saveActiveTab();
       },
-    },
-    {
-      id: "new-tab",
-      label: "New Tab",
-      description: "Create a new request tab",
-      keys: [`${primaryModifier}+N`],
-      category: "Tabs",
-      action: () => {
+      "Edit",
+      "Save Tab",
+      "Save the active request tab",
+    ),
+    createShortcut(
+      "Mod+N",
+      () => {
         useRequestStore.getState().createTab();
       },
-    },
-    {
-      id: "close-tab",
-      label: "Close Tab",
-      description: "Close the active request tab",
-      keys: [`${primaryModifier}+W`],
-      category: "Tabs",
-      action: () => {
+      "Tabs",
+      "New Tab",
+      "Create a new request tab",
+    ),
+    createShortcut(
+      "Mod+W",
+      () => {
         const { activeTabId, closeTab } = useRequestStore.getState();
         if (!activeTabId) {
-          return false;
+          return;
         }
 
         void closeTab(activeTabId);
-        return true;
       },
-    },
-    {
-      id: "next-tab",
-      label: "Next Tab",
-      description: "Switch to the next request tab",
-      keys: ["Ctrl+Tab"],
-      category: "Tabs",
-      action: () => activateAdjacentTab(1),
-    },
-    {
-      id: "previous-tab",
-      label: "Previous Tab",
-      description: "Switch to the previous request tab",
-      keys: ["Ctrl+Shift+Tab"],
-      category: "Tabs",
-      action: () => activateAdjacentTab(-1),
-    },
-    {
-      id: "open-shortcut-palette",
-      label: "Open Shortcut Palette",
-      description: "Show all available keyboard shortcuts",
-      keys: [`${primaryModifier}+K`],
-      category: "General",
-      action: () => {
+      "Tabs",
+      "Close Tab",
+      "Close the active request tab",
+    ),
+    createShortcut(
+      "Control+Tab",
+      () => {
+        activateAdjacentTab(1);
+      },
+      "Tabs",
+      "Next Tab",
+      "Switch to the next request tab",
+    ),
+    createShortcut(
+      "Control+Shift+Tab",
+      () => {
+        activateAdjacentTab(-1);
+      },
+      "Tabs",
+      "Previous Tab",
+      "Switch to the previous request tab",
+    ),
+    createShortcut(
+      "Mod+K",
+      () => {
         onOpenPalette();
       },
-    },
-    {
-      id: "focus-url-bar",
-      label: "Focus URL Bar",
-      description: "Focus the request URL input",
-      keys: [`${primaryModifier}+L`],
-      category: "Navigation",
-      action: () => focusUrlBar(),
-    },
-    {
-      id: "switch-environment",
-      label: "Switch Environment",
-      description: "Cycle to the next available environment",
-      keys: [`${primaryModifier}+E`],
-      category: "Navigation",
-      action: () => {
+      "General",
+      "Open Shortcut Palette",
+      "Show all available keyboard shortcuts",
+    ),
+    createShortcut(
+      "Mod+L",
+      () => {
+        focusUrlBar();
+      },
+      "Navigation",
+      "Focus URL Bar",
+      "Focus the request URL input",
+    ),
+    createShortcut(
+      "Mod+E",
+      () => {
         void cycleEnvironment();
       },
-    },
-    {
-      id: "close-current-dialog",
-      label: "Close Current Dialog",
-      description: "Close the shortcut palette",
-      keys: ["Escape"],
-      category: "General",
-      action: () => {
-        if (!isPaletteOpen) {
-          return false;
-        }
-
+      "Navigation",
+      "Switch Environment",
+      "Cycle to the next available environment",
+    ),
+    createShortcut(
+      "Escape",
+      () => {
         onClosePalette();
-        return true;
       },
-    },
-  ]), [isPaletteOpen, onClosePalette, onOpenPalette, primaryModifier]);
+      "General",
+      "Close Current Dialog",
+      "Close the shortcut palette",
+      isPaletteOpen,
+    ),
+  ]), [isPaletteOpen, onClosePalette, onOpenPalette]);
 
-  useEffect(() => {
-    const unregisterCallbacks = defaultShortcuts.map(registerShortcut);
-
-    return () => {
-      for (const unregister of unregisterCallbacks) {
-        unregister();
-      }
-    };
-  }, [defaultShortcuts, registerShortcut]);
-
-  return {
-    shortcuts,
-    registerShortcut,
-    unregisterShortcut,
-  };
+  useHotkeys(defaultShortcuts);
 }
