@@ -5,6 +5,8 @@ import type {
   HttpRequestData,
   HttpResponseData,
   KeyValue as ApiKeyValue,
+  MultipartField as ApiMultipartField,
+  MultipartValue,
   RequestBody,
 } from "~/bindings";
 import {
@@ -18,7 +20,12 @@ export interface KeyValue extends ApiKeyValue {
   id: string;
 }
 
-export type BodyType = "none" | "json" | "form-urlencoded" | "raw";
+export interface MultipartField extends ApiMultipartField {
+  id: string;
+  fileSizeBytes: number | null;
+}
+
+export type BodyType = "none" | "json" | "form-urlencoded" | "form-data" | "raw";
 export type RequestTab = "params" | "headers" | "body";
 export type ResponseTab = "body" | "headers";
 
@@ -36,6 +43,7 @@ export interface Tab {
   bodyType: BodyType;
   bodyContent: string;
   bodyFormData: KeyValue[];
+  multipartFields: MultipartField[];
   rawContentType: string;
   response: HttpResponseData | null;
   isLoading: boolean;
@@ -58,6 +66,7 @@ interface RequestStore {
   setBodyType: (type: BodyType) => void;
   setBodyContent: (content: string) => void;
   setBodyFormData: (data: KeyValue[]) => void;
+  setMultipartFields: (fields: MultipartField[]) => void;
   setRawContentType: (contentType: string) => void;
   setResponse: (response: HttpResponseData | null) => void;
   setLoading: (loading: boolean) => void;
@@ -116,11 +125,55 @@ const createEmptyKeyValue = (): KeyValue => ({
   id: crypto.randomUUID(),
 });
 
+const createEmptyMultipartField = (): MultipartField => ({
+  key: "",
+  value: { Text: "" },
+  content_type: null,
+  enabled: true,
+  id: crypto.randomUUID(),
+  fileSizeBytes: null,
+});
+
 const toApiKeyValue = ({ key, value, enabled }: KeyValue): ApiKeyValue => ({
   key,
   value,
   enabled,
 });
+
+const toApiMultipartField = ({
+  key,
+  value,
+  content_type,
+  enabled,
+}: MultipartField): ApiMultipartField => ({
+  key,
+  value,
+  content_type,
+  enabled,
+});
+
+const isMultipartTextValue = (
+  value: MultipartValue,
+): value is Extract<MultipartValue, { Text: string }> => "Text" in value;
+
+const isMultipartFileValue = (
+  value: MultipartValue,
+): value is Extract<MultipartValue, { File: { path: string; filename: string | null } }> =>
+  "File" in value;
+
+const isEmptyMultipartField = (field: MultipartField): boolean => {
+  if (!field.key.trim()) {
+    if (isMultipartTextValue(field.value)) {
+      return !field.value.Text.trim();
+    }
+
+    if (isMultipartFileValue(field.value)) {
+      return !field.value.File.path.trim();
+    }
+  }
+
+  return false;
+};
 
 const fromApiKeyValue = ({ key, value, enabled }: ApiKeyValue): KeyValue => ({
   key,
@@ -133,6 +186,7 @@ const toRequestBody = (
   bodyType: BodyType,
   bodyContent: string,
   bodyFormData: KeyValue[],
+  multipartFields: MultipartField[],
   rawContentType: string,
 ): RequestBody => {
   switch (bodyType) {
@@ -143,6 +197,12 @@ const toRequestBody = (
         FormUrlEncoded: bodyFormData
           .filter((item) => item.enabled)
           .map(toApiKeyValue),
+      };
+    case "form-data":
+      return {
+        Multipart: multipartFields
+          .filter((field) => field.enabled && !isEmptyMultipartField(field))
+          .map(toApiMultipartField),
       };
     case "raw":
       return {
@@ -176,6 +236,7 @@ const toHttpFileBody = (tab: Tab): string | null => {
       const serialized = params.toString();
       return serialized.length > 0 ? serialized : null;
     }
+    case "form-data":
     case "none":
     default:
       return null;
@@ -249,6 +310,7 @@ const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => ({
   bodyType: "none",
   bodyContent: "",
   bodyFormData: [],
+  multipartFields: [],
   rawContentType: "text/plain",
   response: null,
   isLoading: false,
@@ -259,7 +321,12 @@ const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => ({
 });
 
 const normalizeBodyType = (value: string): BodyType => {
-  if (value === "json" || value === "form-urlencoded" || value === "raw") {
+  if (
+    value === "json" ||
+    value === "form-urlencoded" ||
+    value === "form-data" ||
+    value === "raw"
+  ) {
     return value;
   }
 
@@ -518,6 +585,8 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     get().updateActiveTab({ bodyContent, isDirty: true }),
   setBodyFormData: (bodyFormData) =>
     get().updateActiveTab({ bodyFormData, isDirty: true }),
+  setMultipartFields: (multipartFields) =>
+    get().updateActiveTab({ multipartFields, isDirty: true }),
   setRawContentType: (rawContentType) =>
     get().updateActiveTab({ rawContentType, isDirty: true }),
   setResponse: (response) => get().updateActiveTab({ response }),
@@ -548,6 +617,8 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
         normalizedBodyType === "form-urlencoded"
           ? parseFormDataBody(request.body)
           : [createEmptyKeyValue()],
+      multipartFields:
+        normalizedBodyType === "form-data" ? [createEmptyMultipartField()] : [],
       rawContentType:
         normalizedBodyType === "json" ? "application/json" : "text/plain",
       response: null,
@@ -691,6 +762,7 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
         tab.bodyType,
         tab.bodyContent,
         tab.bodyFormData,
+        tab.multipartFields,
         tab.rawContentType,
       ),
     };

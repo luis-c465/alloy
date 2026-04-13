@@ -6,6 +6,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { KeyValueEditor } from "~/components/request/KeyValueEditor";
+import { MultipartEditor } from "~/components/request/MultipartEditor";
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ const BODY_TYPE_OPTIONS = [
   { value: "none", label: "None" },
   { value: "json", label: "JSON" },
   { value: "form-urlencoded", label: "Form URL-Encoded" },
+  { value: "form-data", label: "Form Data" },
   { value: "raw", label: "Raw" },
 ] as const;
 
@@ -130,6 +132,12 @@ export function BodyEditor() {
             keyPlaceholder="Field name"
             valuePlaceholder="Value"
           />
+        </div>
+      ) : null}
+
+      {bodyType === "form-data" ? (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <MultipartEditor />
         </div>
       ) : null}
 

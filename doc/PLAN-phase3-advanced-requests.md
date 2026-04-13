@@ -136,20 +136,25 @@ Each feature is a vertical slice adding backend support (Rust/Reqwest) and front
 - We add "Form Data" as a new option.
 
 **Scope:**
+> **Updated by Step 2 executor:** Selecting upload files required backend support beyond the original frontend-only scope. Added `src-tauri/src/commands/workspace.rs` for a new `pick_file` TauRPC procedure that returns file path + display metadata, and `src/bindings.ts` needed a manual refresh because Specta output did not automatically include the Step 1 multipart types in this repo state.
+
 - Modify: `src/components/request/BodyEditor.tsx` (add Form Data option)
 - Create: `src/components/request/MultipartEditor.tsx`
 - Modify: `src/stores/request-store.ts` (add multipart state to Tab)
 - Modify: `src/lib/api.ts` (add file picker API call)
+- Modify: `src-tauri/src/commands/workspace.rs` (add `pick_file` file-picker procedure returning selected file metadata)
+- Modify: `src/bindings.ts` (refresh generated/request payload typings for multipart + file picker)
 
 **Sub-tasks:**
 
 1. **Update Tab state in `request-store.ts`.** Add to the `Tab` interface:
-   - `multipartFields: MultipartField[]` (matches the Rust type from bindings)
+   - `multipartFields: MultipartField[]` (implemented as the Rust IPC shape plus local UI-only `id` and `fileSizeBytes` fields for row tracking/display)
    - Add `"form-data"` to the `BodyType` union type.
    - Update `toRequestBody` to handle `"form-data"` → construct the `Multipart` variant for the IPC call.
 
 2. **Add file picker API to `api.ts`.**
    - `pickFile(filters?)` — calls `api.workspace.pick_file()` or use a dedicated TauRPC procedure that wraps `tauri_plugin_dialog` file picker for selecting upload files. If this wasn't added in Phase 2, add a new `pick_file` procedure on the workspace API that returns the selected file path as a string.
+   - In this codebase, `pick_file` also returns filename and file size so the multipart editor can display a clean filename + size summary without exposing the full path in the UI.
 
 3. **Create `src/components/request/MultipartEditor.tsx`.** A form-data editor:
    - Similar layout to `KeyValueEditor` but with an extra column for the value type.

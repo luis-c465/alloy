@@ -29,9 +29,15 @@ export type HttpResponseData = { status: number; status_text: string; headers: K
 
 export type KeyValue = { key: string; value: string; enabled: boolean }
 
-export type RequestBody = "None" | { Json: string } | { FormUrlEncoded: KeyValue[] } | { Raw: { content: string; content_type: string } }
+export type MultipartValue = { Text: string } | { File: { path: string; filename: string | null } }
 
-const ARGS_MAP = { '':'{"send_request":["request"],"send_request_with_env":["request","environment_name","workspace_path"]}', 'environment':'{"delete_environment":["workspace_path","name"],"list_environments":["workspace_path"],"read_environment":["workspace_path","name"],"resolve_url_preview":["url","workspace_path","env_name"],"save_environment":["workspace_path","env"],"set_active_environment":["workspace_path","name"]}', 'history':'{"clear_history":[],"delete_history_entry":["id"],"get_history_entry":["id"],"list_history":["filter"]}', 'workspace':'{"create_directory":["parent_path","dir_name"],"create_http_file":["dir_path","file_name"],"delete_path":["target_path"],"ensure_workspace":["workspace_path"],"list_files":["workspace_path"],"pick_workspace_folder":[],"read_http_file":["file_path"],"rename_path":["from_path","to_path"],"write_http_file":["file_path","data"]}' }
+export type MultipartField = { key: string; value: MultipartValue; content_type: string | null; enabled: boolean }
+
+export type PickedFile = { path: string; name: string; size_bytes: number | null }
+
+export type RequestBody = "None" | { Json: string } | { FormUrlEncoded: KeyValue[] } | { Multipart: MultipartField[] } | { Raw: { content: string; content_type: string } }
+
+const ARGS_MAP = { '':'{"send_request":["request"],"send_request_with_env":["request","environment_name","workspace_path"]}', 'environment':'{"delete_environment":["workspace_path","name"],"list_environments":["workspace_path"],"read_environment":["workspace_path","name"],"resolve_url_preview":["url","workspace_path","env_name"],"save_environment":["workspace_path","env"],"set_active_environment":["workspace_path","name"]}', 'history':'{"clear_history":[],"delete_history_entry":["id"],"get_history_entry":["id"],"list_history":["filter"]}', 'workspace':'{"create_directory":["parent_path","dir_name"],"create_http_file":["dir_path","file_name"],"delete_path":["target_path"],"ensure_workspace":["workspace_path"],"list_files":["workspace_path"],"pick_file":[],"pick_workspace_folder":[],"read_http_file":["file_path"],"rename_path":["from_path","to_path"],"write_http_file":["file_path","data"]}' }
 export type Router = { "": {send_request: (request: HttpRequestData) => Promise<HttpResponseData>, 
 send_request_with_env: (request: HttpRequestData, environmentName: string | null, workspacePath: string | null) => Promise<HttpResponseData>},
 "environment": {delete_environment: (workspacePath: string, name: string) => Promise<null>, 
@@ -49,6 +55,7 @@ create_http_file: (dirPath: string, fileName: string) => Promise<string>,
 delete_path: (targetPath: string) => Promise<null>, 
 ensure_workspace: (workspacePath: string) => Promise<null>, 
 list_files: (workspacePath: string) => Promise<FileEntry[]>, 
+pick_file: () => Promise<PickedFile | null>, 
 pick_workspace_folder: () => Promise<string | null>, 
 read_http_file: (filePath: string) => Promise<HttpFileData>, 
 rename_path: (fromPath: string, toPath: string) => Promise<null>, 

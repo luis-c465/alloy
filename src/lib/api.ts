@@ -10,6 +10,7 @@ import type {
   HttpFileData,
   HttpRequestData,
   HttpResponseData,
+  PickedFile,
 } from "~/bindings";
 
 const api = createTauRPCProxy();
@@ -32,6 +33,10 @@ export const sendRequestWithEnv = async (
 
 export const pickWorkspaceFolder = async (): Promise<string | null> => {
   return api.workspace.pick_workspace_folder();
+};
+
+export const pickFile = async (): Promise<PickedFile | null> => {
+  return api.workspace.pick_file();
 };
 
 export const listFiles = async (path: string): Promise<FileEntry[]> => {

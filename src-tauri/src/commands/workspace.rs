@@ -14,9 +14,17 @@ use crate::{
     },
 };
 
+#[taurpc::ipc_type]
+pub struct PickedFile {
+    pub path: String,
+    pub name: String,
+    pub size_bytes: Option<u64>,
+}
+
 #[taurpc::procedures(path = "workspace", export_to = "../src/bindings.ts")]
 pub trait WorkspaceApi {
     async fn pick_workspace_folder() -> Result<Option<String>, AppError>;
+    async fn pick_file() -> Result<Option<PickedFile>, AppError>;
     async fn list_files(workspace_path: String) -> Result<Vec<FileEntry>, AppError>;
     async fn read_http_file(file_path: String) -> Result<HttpFileData, AppError>;
     async fn write_http_file(file_path: String, data: HttpFileData) -> Result<(), AppError>;
@@ -54,6 +62,40 @@ impl WorkspaceApi for WorkspaceApiImpl {
         })
         .await
         .map_err(|error| AppError::RequestError(format!("Failed to open folder picker: {error}")))
+    }
+
+    async fn pick_file(self) -> Result<Option<PickedFile>, AppError> {
+        let app_handle = self.app_handle()?;
+
+        tokio::task::spawn_blocking(move || {
+            let Some(file_path) = app_handle.dialog().file().blocking_pick_file() else {
+                return Ok(None);
+            };
+
+            let path = file_path.into_path().map_err(|error| {
+                AppError::RequestError(format!("Selected file is not a local path: {error}"))
+            })?;
+
+            let metadata = std::fs::metadata(&path).map_err(|error| {
+                AppError::IoError(format!(
+                    "Failed to read file metadata for {}: {error}",
+                    path.display()
+                ))
+            })?;
+
+            let name = path
+                .file_name()
+                .map(|value| value.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.to_string_lossy().into_owned());
+
+            Ok(Some(PickedFile {
+                path: path.to_string_lossy().into_owned(),
+                name,
+                size_bytes: Some(metadata.len()),
+            }))
+        })
+        .await
+        .map_err(|error| AppError::RequestError(format!("Failed to open file picker: {error}")))?
     }
 
     async fn list_files(self, workspace_path: String) -> Result<Vec<FileEntry>, AppError> {
