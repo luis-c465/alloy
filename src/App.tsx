@@ -8,6 +8,7 @@ import {
   usePanelRef,
 } from "react-resizable-panels";
 import { Sidebar } from "~/components/layout/Sidebar";
+import { ShortcutPalette } from "~/components/layout/ShortcutPalette";
 import { TabBar } from "~/components/layout/TabBar";
 import { Toolbar } from "~/components/layout/Toolbar";
 import { RequestPanel } from "~/components/request/RequestPanel";
@@ -22,7 +23,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { useKeyboardShortcuts } from "~/hooks/useKeyboardShortcuts";
+import { useShortcuts } from "~/hooks/useShortcuts";
 import {
   registerDirtyTabPromptHandler,
   registerSaveAsHandler,
@@ -96,9 +97,22 @@ export default function App() {
   const isAutoCollapsingRef = useRef(false);
   const [dirtyPromptState, setDirtyPromptState] = useState<DirtyPromptState>(null);
   const [saveAsState, setSaveAsState] = useState<SaveAsState>(null);
+  const [isShortcutPaletteOpen, setIsShortcutPaletteOpen] = useState(false);
   const allowWindowCloseRef = useRef(false);
 
-  useKeyboardShortcuts();
+  const openShortcutPalette = useCallback(() => {
+    setIsShortcutPaletteOpen(true);
+  }, []);
+
+  const closeShortcutPalette = useCallback(() => {
+    setIsShortcutPaletteOpen(false);
+  }, []);
+
+  const { shortcuts } = useShortcuts({
+    isPaletteOpen: isShortcutPaletteOpen,
+    onOpenPalette: openShortcutPalette,
+    onClosePalette: closeShortcutPalette,
+  });
 
   useEffect(() => {
     const unregisterDirtyPrompt = registerDirtyTabPromptHandler(
@@ -333,6 +347,12 @@ export default function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ShortcutPalette
+        open={isShortcutPaletteOpen}
+        onOpenChange={setIsShortcutPaletteOpen}
+        shortcuts={shortcuts}
+      />
 
       <Dialog
         open={saveAsState !== null}
