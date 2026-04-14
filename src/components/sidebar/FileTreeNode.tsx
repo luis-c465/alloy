@@ -6,7 +6,7 @@ import {
   IconFolderOpen,
 } from "@tabler/icons-react";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { memo, useMemo, useRef, useState, type MouseEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
 import type { FileEntry } from "~/bindings";
 import { Input } from "~/components/ui/input";
@@ -20,26 +20,28 @@ import { useFileTreeContext } from "./FileTreeContext";
 type FileTreeNodeProps = {
   entry: FileEntry;
   depth: number;
+  defaultExpanded: boolean;
 };
 
 export const FileTreeNode = memo(function FileTreeNode({
   entry,
   depth,
+  defaultExpanded,
 }: FileTreeNodeProps) {
-  const [isExpanded, setIsExpanded] = useState(
-    depth < FILE_TREE_INITIAL_EXPANSION_DEPTH,
-  );
   const [contextMenuPosition, setContextMenuPosition] =
     useState<{ x: number; y: number } | null>(null);
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const {
     activeFilePath,
     selectedPath,
+    expandedState,
     renamingPath,
     renameDraft,
     onSelect,
+    onToggleDirectory,
     onOpenFile,
     onCreateFile,
     onCreateFolder,
@@ -55,7 +57,16 @@ export const FileTreeNode = memo(function FileTreeNode({
   const canOpen = !isDirectory && isHttpLikeFile(entry.name);
   const isActiveFile = !isDirectory && activeFilePath === entry.path;
   const isSelected = selectedPath === entry.path;
+  const isExpanded = isDirectory ? (expandedState[entry.path] ?? defaultExpanded) : false;
   const children = useMemo(() => entry.children ?? [], [entry.children]);
+
+  useEffect(() => {
+    if (!isSelected) {
+      return;
+    }
+
+    rowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [isSelected]);
 
   const handleContextMenu = (event: MouseEvent<HTMLElement>) => {
     event.preventDefault();
@@ -93,6 +104,7 @@ export const FileTreeNode = memo(function FileTreeNode({
   return (
     <div className="min-w-0">
       <div
+        ref={rowRef}
         className={cn(
           "group/tree-row relative flex h-7 min-w-0 items-center rounded-sm text-xs",
           isSelected && "bg-muted/50",
@@ -104,11 +116,11 @@ export const FileTreeNode = memo(function FileTreeNode({
           <button
             type="button"
             className="mr-0.5 inline-flex size-4 items-center justify-center rounded-xs text-muted-foreground hover:bg-muted"
-            onClick={() => {
-              setIsExpanded((current) => !current);
-            }}
-            onContextMenu={handleContextMenu}
-            aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
+              onClick={() => {
+                onToggleDirectory(entry.path, !isExpanded);
+              }}
+              onContextMenu={handleContextMenu}
+              aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
           >
             <IconChevronRight
               className={cn("size-3 transition-transform", isExpanded && "rotate-90")}
@@ -147,7 +159,7 @@ export const FileTreeNode = memo(function FileTreeNode({
               onSelect(entry);
 
               if (isDirectory) {
-                setIsExpanded((current) => !current);
+                onToggleDirectory(entry.path, !isExpanded);
                 return;
               }
 
@@ -214,6 +226,7 @@ export const FileTreeNode = memo(function FileTreeNode({
               key={child.path}
               entry={child}
               depth={depth + 1}
+              defaultExpanded={depth + 1 < FILE_TREE_INITIAL_EXPANSION_DEPTH}
             />
           ))}
         </div>

@@ -5,6 +5,7 @@ import { MethodSelector } from "~/components/request/MethodSelector";
 import { OptionsEditor } from "~/components/request/OptionsEditor";
 import { ParamsEditor } from "~/components/request/ParamsEditor";
 import { ResolvedUrlPreview } from "~/components/request/ResolvedUrlPreview";
+import { RequestBreadcrumb } from "~/components/request/RequestBreadcrumb";
 import { SendButton } from "~/components/request/SendButton";
 import { UrlBar } from "~/components/request/UrlBar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -29,6 +30,8 @@ export function RequestPanel() {
         <UrlBar />
         <SendButton />
       </div>
+
+      <RequestBreadcrumb />
 
       <ResolvedUrlPreview />
 

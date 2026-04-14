@@ -5,9 +5,11 @@ import type { FileEntry } from "~/bindings";
 export type FileTreeContextValue = {
   activeFilePath: string | null;
   selectedPath: string | null;
+  expandedState: Record<string, boolean>;
   renamingPath: string | null;
   renameDraft: string;
   onSelect: (entry: FileEntry) => void;
+  onToggleDirectory: (path: string, expanded: boolean) => void;
   onOpenFile: (path: string) => void;
   onCreateFile: (parentPath: string) => void;
   onCreateFolder: (parentPath: string) => void;
@@ -28,9 +30,11 @@ export function FileTreeContextProvider({
   children,
   activeFilePath,
   selectedPath,
+  expandedState,
   renamingPath,
   renameDraft,
   onSelect,
+  onToggleDirectory,
   onOpenFile,
   onCreateFile,
   onCreateFolder,
@@ -45,9 +49,11 @@ export function FileTreeContextProvider({
       value={{
         activeFilePath,
         selectedPath,
+        expandedState,
         renamingPath,
         renameDraft,
         onSelect,
+        onToggleDirectory,
         onOpenFile,
         onCreateFile,
         onCreateFolder,

@@ -33,6 +33,7 @@ import {
   joinPath,
 } from "~/lib/path";
 import { cn } from "~/lib/utils";
+import { FILE_TREE_INITIAL_EXPANSION_DEPTH } from "~/lib/constants";
 import { useRequestStore } from "~/stores/request-store";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
@@ -89,6 +90,10 @@ const isValidName = (value: string): boolean => {
 export function CollectionsPanel() {
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const fallbackFileTree = useWorkspaceStore((state) => state.fileTree);
+  const selectedPath = useWorkspaceStore((state) => state.selectedPath);
+  const expandedState = useWorkspaceStore((state) => state.expandedState);
+  const setSelectedPath = useWorkspaceStore((state) => state.setSelectedPath);
+  const setPathExpanded = useWorkspaceStore((state) => state.setPathExpanded);
   const fileTreeQuery = useFileTree(workspacePath);
   const fileTree = fileTreeQuery.data ?? fallbackFileTree;
 
@@ -97,7 +102,6 @@ export function CollectionsPanel() {
     (state) => state.tabs.find((tab) => tab.id === state.activeTabId)?.filePath ?? null,
   );
 
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [createMode, setCreateMode] = useState<CreateMode>(null);
   const [createName, setCreateName] = useState("");
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
@@ -279,6 +283,10 @@ export function CollectionsPanel() {
     setRenamingPath(entry.path);
     setRenameDraft(entry.name);
     setSelectedPath(entry.path);
+  };
+
+  const handleToggleDirectory = (path: string, expanded: boolean) => {
+    setPathExpanded(path, expanded);
   };
 
   const handleSubmitRename = async () => {
@@ -509,11 +517,13 @@ export function CollectionsPanel() {
       <FileTreeContextProvider
         activeFilePath={activeFilePath}
         selectedPath={selectedPath}
+        expandedState={expandedState}
         renamingPath={renamingPath}
         renameDraft={renameDraft}
         onSelect={(entryToSelect) => {
           setSelectedPath(entryToSelect.path);
         }}
+        onToggleDirectory={handleToggleDirectory}
         onOpenFile={(path) => {
           void handleOpenFile(path);
         }}
@@ -542,6 +552,7 @@ export function CollectionsPanel() {
                 key={entry.path}
                 entry={entry}
                 depth={0}
+                defaultExpanded={0 < FILE_TREE_INITIAL_EXPANSION_DEPTH}
               />
             ))
           )}
