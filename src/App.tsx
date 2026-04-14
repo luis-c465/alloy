@@ -23,10 +23,12 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
+import { ScrollArea } from "~/components/ui/scroll-area";
 import { useShortcuts } from "~/hooks/useShortcuts";
 import { buildDefaultSavePath } from "~/lib/path";
 import {
   registerDirtyTabPromptHandler,
+  registerTabLimitPromptHandler,
   registerSaveAsHandler,
   type DirtyTabDecision,
   type Tab,
@@ -54,6 +56,12 @@ type SaveAsState = {
   resolve: (path: string | null) => void;
 } | null;
 
+type TabLimitPromptState = {
+  candidates: Tab[];
+  selectedTabId: string | null;
+  resolve: (selectedTabId: string | null) => void;
+} | null;
+
 export default function App() {
   const sidebarPanelRef = usePanelRef();
   const outerLayout = useDefaultLayout({
@@ -68,6 +76,7 @@ export default function App() {
   const isAutoCollapsingRef = useRef(false);
   const [dirtyPromptState, setDirtyPromptState] = useState<DirtyPromptState>(null);
   const [saveAsState, setSaveAsState] = useState<SaveAsState>(null);
+  const [tabLimitPromptState, setTabLimitPromptState] = useState<TabLimitPromptState>(null);
   const [isShortcutPaletteOpen, setIsShortcutPaletteOpen] = useState(false);
   const allowWindowCloseRef = useRef(false);
   const initTheme = useThemeStore((state) => state.initTheme);
@@ -102,7 +111,7 @@ export default function App() {
       }),
     );
     const unregisterSaveAs = registerSaveAsHandler(
-        async (tab) => new Promise<string | null>((resolve) => {
+      async (tab) => new Promise<string | null>((resolve) => {
         setSaveAsState({
           tab,
           path: buildDefaultSavePath(
@@ -115,10 +124,20 @@ export default function App() {
         });
       }),
     );
+    const unregisterTabLimitPrompt = registerTabLimitPromptHandler(
+      (tabs) => new Promise<string | null>((resolve) => {
+        setTabLimitPromptState({
+          candidates: tabs,
+          selectedTabId: tabs[0]?.id ?? null,
+          resolve,
+        });
+      }),
+    );
 
     return () => {
       unregisterDirtyPrompt();
       unregisterSaveAs();
+      unregisterTabLimitPrompt();
     };
   }, []);
 
@@ -180,6 +199,13 @@ export default function App() {
   const resolveSaveAs = useCallback((path: string | null) => {
     setSaveAsState((currentState) => {
       currentState?.resolve(path);
+      return null;
+    });
+  }, []);
+
+  const resolveTabLimitPrompt = useCallback((selectedTabId: string | null) => {
+    setTabLimitPromptState((currentState) => {
+      currentState?.resolve(selectedTabId);
       return null;
     });
   }, []);
@@ -329,6 +355,81 @@ export default function App() {
             </Button>
             <Button onClick={() => resolveDirtyPrompt("save")}>
               {dirtyPromptState?.mode === "app" ? "Save All" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={tabLimitPromptState !== null}
+        onOpenChange={(open) => {
+          if (!open && tabLimitPromptState) {
+            resolveTabLimitPrompt(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Close a tab to continue</DialogTitle>
+            <DialogDescription>
+              Your tab limit has been reached. Choose a tab to close so the new tab can open.
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-56 rounded-md border border-border bg-muted/10">
+            <div className="space-y-1 p-2">
+              {tabLimitPromptState?.candidates.length === 0 ? (
+                <p className="px-1 py-2 text-xs text-muted-foreground">
+                  No tabs are currently eligible to close.
+                </p>
+              ) : (
+                tabLimitPromptState?.candidates.map((tab) => {
+                  const isSelected = tabLimitPromptState?.selectedTabId === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        setTabLimitPromptState((currentState) => {
+                          if (!currentState) {
+                            return null;
+                          }
+
+                          return {
+                            ...currentState,
+                            selectedTabId: tab.id,
+                          };
+                        });
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs ${
+                        isSelected
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-background hover:bg-muted/50"
+                      }`}
+                    >
+                      <span className="shrink-0 text-[10px] font-semibold uppercase text-muted-foreground">
+                        {tab.method}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {tab.name || tab.url || "New Request"}
+                      </span>
+                      {tab.isDirty ? <span className="size-1.5 rounded-full bg-primary" /> : null}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => resolveTabLimitPrompt(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => resolveTabLimitPrompt(tabLimitPromptState?.selectedTabId ?? null)}
+              disabled={!tabLimitPromptState?.selectedTabId}
+            >
+              Close selected tab
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -34,6 +34,24 @@ export type BodyType = "none" | "json" | "form-urlencoded" | "form-data" | "raw"
 export type AuthType = "none" | "bearer" | "basic";
 export type RequestTab = (typeof REQUEST_TABS)[number];
 export type ResponseTab = (typeof RESPONSE_TABS)[number];
+export type DirtyTabEvictionMode = "protect" | "prompt";
+export type NoClosableTabBehavior = "block" | "skip" | "prompt";
+
+export interface TabLimitSettings {
+  enabled: boolean;
+  limit: number;
+  dirtyTabEvictionMode: DirtyTabEvictionMode;
+  whenNoClosableTab: NoClosableTabBehavior;
+}
+
+const TAB_LIMIT_SETTINGS_KEY = "alloy-tab-limit-settings";
+
+const DEFAULT_TAB_LIMIT_SETTINGS: TabLimitSettings = {
+  enabled: false,
+  limit: 10,
+  dirtyTabEvictionMode: "protect",
+  whenNoClosableTab: "block",
+};
 
 export interface Tab {
   id: string;
@@ -62,12 +80,15 @@ export interface Tab {
   error: string | null;
   activeRequestTab: RequestTab;
   activeResponseTab: ResponseTab;
+  lastInteractedAt: number;
 }
 
 interface RequestStore {
   tabs: Tab[];
   activeTabId: string | null;
-  createTab: (options?: Partial<Tab>) => string;
+  tabLimitSettings: TabLimitSettings;
+  tabLimitNotice: string | null;
+  createTab: (options?: Partial<Tab>) => Promise<string | null>;
   duplicateTab: (id: string) => string | null;
   closeTab: (id: string) => Promise<void>;
   closeOtherTabs: (id: string) => Promise<void>;
@@ -100,12 +121,14 @@ interface RequestStore {
     request: HttpFileRequest,
     filePath: string,
     requestIndex?: number,
-  ) => string;
+  ) => Promise<string | null>;
   syncQueryParamsToUrl: () => void;
   syncUrlToQueryParams: () => void;
   saveTab: (id: string) => Promise<boolean>;
   saveActiveTab: () => Promise<boolean>;
   saveActiveTabAs: () => Promise<boolean>;
+  setTabLimitSettings: (settings: Partial<TabLimitSettings>) => void;
+  clearTabLimitNotice: () => void;
   sendRequest: () => Promise<void>;
 }
 
@@ -113,9 +136,15 @@ export type DirtyTabDecision = (typeof DIRTY_TAB_DECISIONS)[number];
 
 type DirtyTabPromptHandler = (tab: Tab) => Promise<DirtyTabDecision>;
 type SaveAsHandler = (tab: Tab) => Promise<string | null>;
+type TabLimitPromptHandler = (tabs: Tab[]) => Promise<string | null>;
+type TabLimitOpenInstruction =
+  | { kind: "open" }
+  | { kind: "deny"; notice: string }
+  | { kind: "close"; tabId: string };
 
 let dirtyTabPromptHandler: DirtyTabPromptHandler | null = null;
 let saveAsHandler: SaveAsHandler | null = null;
+let tabLimitPromptHandler: TabLimitPromptHandler | null = null;
 
 export const registerDirtyTabPromptHandler = (
   handler: DirtyTabPromptHandler,
@@ -139,6 +168,18 @@ export const registerSaveAsHandler = (handler: SaveAsHandler): (() => void) => {
   };
 };
 
+export const registerTabLimitPromptHandler = (
+  handler: TabLimitPromptHandler,
+): (() => void) => {
+  tabLimitPromptHandler = handler;
+
+  return () => {
+    if (tabLimitPromptHandler === handler) {
+      tabLimitPromptHandler = null;
+    }
+  };
+};
+
 export const createEmptyKeyValue = (): KeyValue => ({
   key: "",
   value: "",
@@ -154,6 +195,166 @@ const createEmptyMultipartField = (): MultipartField => ({
   id: crypto.randomUUID(),
   fileSizeBytes: null,
 });
+
+const TAB_LIMIT_STORAGE_MIN = 1;
+const TAB_LIMIT_STORAGE_MAX = 100;
+
+const isBrowser = (): boolean => typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+
+const clampTabLimit = (value: number): number => {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_TAB_LIMIT_SETTINGS.limit;
+  }
+
+  const rounded = Math.trunc(value);
+  if (rounded <= 0) {
+    return TAB_LIMIT_STORAGE_MIN;
+  }
+
+  if (rounded > TAB_LIMIT_STORAGE_MAX) {
+    return TAB_LIMIT_STORAGE_MAX;
+  }
+
+  if (rounded < TAB_LIMIT_STORAGE_MIN) {
+    return TAB_LIMIT_STORAGE_MIN;
+  }
+
+  return rounded;
+};
+
+const isDirtyTabEvictionMode = (value: unknown): value is DirtyTabEvictionMode => (
+  value === "protect" || value === "prompt"
+);
+
+const isNoClosableTabBehavior = (value: unknown): value is NoClosableTabBehavior => (
+  value === "block" || value === "skip" || value === "prompt"
+);
+
+const normalizeTabLimitSettings = (settings: Partial<TabLimitSettings>): TabLimitSettings => ({
+  enabled: settings.enabled ?? DEFAULT_TAB_LIMIT_SETTINGS.enabled,
+  limit: clampTabLimit(settings.limit ?? DEFAULT_TAB_LIMIT_SETTINGS.limit),
+  dirtyTabEvictionMode: isDirtyTabEvictionMode(settings.dirtyTabEvictionMode)
+    ? settings.dirtyTabEvictionMode
+    : DEFAULT_TAB_LIMIT_SETTINGS.dirtyTabEvictionMode,
+  whenNoClosableTab: isNoClosableTabBehavior(settings.whenNoClosableTab)
+    ? settings.whenNoClosableTab
+    : DEFAULT_TAB_LIMIT_SETTINGS.whenNoClosableTab,
+});
+
+const buildTabLimitNotice = (limit: number): string => (
+  `Tab limit reached (${limit}). Close a tab before opening another request.`
+);
+
+const readTabLimitSettingsFromStorage = (): TabLimitSettings => {
+  if (!isBrowser()) {
+    return DEFAULT_TAB_LIMIT_SETTINGS;
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(TAB_LIMIT_SETTINGS_KEY);
+    if (!storedValue) {
+      return DEFAULT_TAB_LIMIT_SETTINGS;
+    }
+
+    const parsed = JSON.parse(storedValue) as Record<string, unknown>;
+
+    const dirtyTabEvictionMode = isDirtyTabEvictionMode(parsed.dirtyTabEvictionMode)
+      ? parsed.dirtyTabEvictionMode
+      : undefined;
+
+    const whenNoClosableTab = isNoClosableTabBehavior(parsed.whenNoClosableTab)
+      ? parsed.whenNoClosableTab
+      : undefined;
+
+    return normalizeTabLimitSettings({
+      enabled: parsed.enabled === true ? true : parsed.enabled === false ? false : undefined,
+      limit: typeof parsed.limit === "number" ? parsed.limit : undefined,
+      dirtyTabEvictionMode,
+      whenNoClosableTab,
+    });
+  } catch {
+    return DEFAULT_TAB_LIMIT_SETTINGS;
+  }
+};
+
+const saveTabLimitSettingsToStorage = (settings: TabLimitSettings): void => {
+  if (!isBrowser()) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(TAB_LIMIT_SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // Persisting settings is best-effort and should not break tab flow.
+  }
+};
+
+const getTabLimitCandidates = (tabs: Tab[], activeTabId: string | null): Tab[] => {
+  return tabs
+    .filter((tab) => tab.id !== activeTabId)
+    .filter((tab) => !tab.isLoading)
+    .filter((tab) => !tab.isDirty)
+    .sort((a, b) => a.lastInteractedAt - b.lastInteractedAt);
+};
+
+const getTabLimitPromptCandidates = (
+  tabs: Tab[],
+  activeTabId: string | null,
+  dirtyTabEvictionMode: DirtyTabEvictionMode,
+): Tab[] => {
+  const validTabs = tabs.filter((tab) => tab.id !== activeTabId && !tab.isLoading);
+
+  if (dirtyTabEvictionMode === "protect") {
+    return validTabs.filter((tab) => !tab.isDirty);
+  }
+
+  return validTabs;
+};
+
+const maybeEnforceTabLimitBeforeOpen = async (
+  tabs: Tab[],
+  activeTabId: string | null,
+  settings: TabLimitSettings,
+): Promise<TabLimitOpenInstruction> => {
+  if (!settings.enabled || tabs.length < settings.limit) {
+    return { kind: "open" };
+  }
+
+  const evictionCandidates = getTabLimitCandidates(tabs, activeTabId);
+  if (evictionCandidates.length > 0) {
+    return { kind: "close", tabId: evictionCandidates[0]!.id };
+  }
+
+  if (settings.whenNoClosableTab === "skip") {
+    return { kind: "open" };
+  }
+
+  if (settings.whenNoClosableTab === "block") {
+    return { kind: "deny", notice: buildTabLimitNotice(settings.limit) };
+  }
+
+  const promptCandidates = getTabLimitPromptCandidates(
+    tabs,
+    activeTabId,
+    settings.dirtyTabEvictionMode,
+  );
+
+  if (!tabLimitPromptHandler) {
+    return { kind: "deny", notice: buildTabLimitNotice(settings.limit) };
+  }
+
+  const selectedTabId = await tabLimitPromptHandler(promptCandidates);
+  if (!selectedTabId) {
+    return { kind: "deny", notice: buildTabLimitNotice(settings.limit) };
+  }
+
+  const matchingTab = promptCandidates.some((tab) => tab.id === selectedTabId);
+  if (!matchingTab) {
+    return { kind: "deny", notice: buildTabLimitNotice(settings.limit) };
+  }
+
+  return { kind: "close", tabId: selectedTabId };
+};
 
 const toApiKeyValue = ({ key, value, enabled }: KeyValue): ApiKeyValue => ({
   key,
@@ -457,6 +658,7 @@ const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => ({
   error: null,
   activeRequestTab: "params",
   activeResponseTab: "body",
+  lastInteractedAt: Date.now(),
   ...overrides,
 });
 
@@ -533,6 +735,23 @@ const parseFormDataBody = (body: string | null): KeyValue[] => {
 
   return entries.length > 0 ? entries : [createEmptyKeyValue()];
 };
+
+const touchTabById = (tabs: Tab[], tabId: string, now = Date.now()): Tab[] => (
+  tabs.map((tab) => (tab.id === tabId ? { ...tab, lastInteractedAt: now } : tab))
+);
+
+const touchActiveTab = (state: { tabs: Tab[]; activeTabId: string | null }): Tab[] => {
+  if (!state.activeTabId) {
+    return state.tabs;
+  }
+
+  return touchTabById(state.tabs, state.activeTabId);
+};
+
+const withInteraction = (patch: Partial<Tab>): Partial<Tab> => ({
+  ...patch,
+  lastInteractedAt: Date.now(),
+});
 
 const latestRequestTokenByTab = new Map<string, number>();
 
@@ -706,14 +925,39 @@ const saveTabById = async (
 
 const initialTab = createDefaultTab();
 
+const initialTabLimitSettings = readTabLimitSettingsFromStorage();
+
 export const useRequestStore = create<RequestStore>()((set, get) => ({
   tabs: [initialTab],
   activeTabId: initialTab.id,
-  createTab: (options) => {
+  tabLimitSettings: initialTabLimitSettings,
+  tabLimitNotice: null,
+  createTab: async (options) => {
+    const state = get();
+    const decision = await maybeEnforceTabLimitBeforeOpen(
+      state.tabs,
+      state.activeTabId,
+      state.tabLimitSettings,
+    );
+
+    if (decision.kind === "deny") {
+      set({ tabLimitNotice: decision.notice });
+      return null;
+    }
+
+    if (decision.kind === "close") {
+      await get().closeTab(decision.tabId);
+      if (get().tabs.some((tab) => tab.id === decision.tabId)) {
+        set({ tabLimitNotice: buildTabLimitNotice(state.tabLimitSettings.limit) });
+        return null;
+      }
+    }
+
     const tab = createDefaultTab(options);
     set((state) => ({
       tabs: [...state.tabs, tab],
       activeTabId: tab.id,
+      tabLimitNotice: null,
     }));
     return tab.id;
   },
@@ -808,7 +1052,10 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
         return state;
       }
 
-      return { activeTabId: id };
+      return {
+        activeTabId: id,
+        tabs: touchActiveTab({ tabs: state.tabs, activeTabId: id }),
+      };
     });
   },
   updateActiveTab: (patch) => {
@@ -824,39 +1071,59 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       };
     });
   },
-  setMethod: (method) => get().updateActiveTab({ method, isDirty: true }),
-  setUrl: (url) => get().updateActiveTab({ url, isDirty: true }),
-  setHeaders: (headers) => get().updateActiveTab({ headers, isDirty: true }),
+  setMethod: (method) => get().updateActiveTab(withInteraction({ method, isDirty: true })),
+  setUrl: (url) => get().updateActiveTab(withInteraction({ url, isDirty: true })),
+  setHeaders: (headers) => get().updateActiveTab(withInteraction({ headers, isDirty: true })),
   setQueryParams: (queryParams) =>
-    get().updateActiveTab({ queryParams, isDirty: true }),
-  setBodyType: (bodyType) => get().updateActiveTab({ bodyType, isDirty: true }),
+    get().updateActiveTab(withInteraction({ queryParams, isDirty: true })),
+  setBodyType: (bodyType) => get().updateActiveTab(withInteraction({ bodyType, isDirty: true })),
   setBodyContent: (bodyContent) =>
-    get().updateActiveTab({ bodyContent, isDirty: true }),
+    get().updateActiveTab(withInteraction({ bodyContent, isDirty: true })),
   setBodyFormData: (bodyFormData) =>
-    get().updateActiveTab({ bodyFormData, isDirty: true }),
+    get().updateActiveTab(withInteraction({ bodyFormData, isDirty: true })),
   setMultipartFields: (multipartFields) =>
-    get().updateActiveTab({ multipartFields, isDirty: true }),
+    get().updateActiveTab(withInteraction({ multipartFields, isDirty: true })),
   setRawContentType: (rawContentType) =>
-    get().updateActiveTab({ rawContentType, isDirty: true }),
-  setAuthType: (authType) => get().updateActiveTab({ authType, isDirty: true }),
-  setAuthBearer: (authBearer) => get().updateActiveTab({ authBearer, isDirty: true }),
+    get().updateActiveTab(withInteraction({ rawContentType, isDirty: true })),
+  setAuthType: (authType) => get().updateActiveTab(withInteraction({ authType, isDirty: true })),
+  setAuthBearer: (authBearer) => get().updateActiveTab(withInteraction({ authBearer, isDirty: true })),
   setAuthBasicUsername: (authBasicUsername) =>
-    get().updateActiveTab({ authBasicUsername, isDirty: true }),
+    get().updateActiveTab(withInteraction({ authBasicUsername, isDirty: true })),
   setAuthBasicPassword: (authBasicPassword) =>
-    get().updateActiveTab({ authBasicPassword, isDirty: true }),
+    get().updateActiveTab(withInteraction({ authBasicPassword, isDirty: true })),
   setSkipSslVerification: (skipSslVerification) =>
-    get().updateActiveTab({ skipSslVerification, isDirty: true }),
+    get().updateActiveTab(withInteraction({ skipSslVerification, isDirty: true })),
   setTimeoutMs: (timeoutMs) =>
-    get().updateActiveTab({ timeoutMs: normalizeTimeoutMs(timeoutMs), isDirty: true }),
+    get().updateActiveTab(withInteraction({ timeoutMs: normalizeTimeoutMs(timeoutMs), isDirty: true })),
   setResponse: (response) => get().updateActiveTab({ response }),
   setLoading: (isLoading) => get().updateActiveTab({ isLoading }),
   setError: (error) => get().updateActiveTab({ error }),
   setActiveRequestTab: (activeRequestTab) => get().updateActiveTab({ activeRequestTab }),
   setActiveResponseTab: (activeResponseTab) =>
     get().updateActiveTab({ activeResponseTab }),
-  markDirty: () => get().updateActiveTab({ isDirty: true }),
+  markDirty: () => get().updateActiveTab(withInteraction({ isDirty: true })),
   markClean: () => get().updateActiveTab({ isDirty: false }),
-  openRequestInTab: (request, filePath, requestIndex = 0) => {
+  openRequestInTab: async (request, filePath, requestIndex = 0) => {
+    const state = get();
+    const decision = await maybeEnforceTabLimitBeforeOpen(
+      state.tabs,
+      state.activeTabId,
+      state.tabLimitSettings,
+    );
+
+    if (decision.kind === "deny") {
+      set({ tabLimitNotice: decision.notice });
+      return null;
+    }
+
+    if (decision.kind === "close") {
+      await get().closeTab(decision.tabId);
+      if (get().tabs.some((tab) => tab.id === decision.tabId)) {
+        set({ tabLimitNotice: buildTabLimitNotice(state.tabLimitSettings.limit) });
+        return null;
+      }
+    }
+
     const normalizedBodyType = normalizeBodyType(request.body_type);
     const requestName = request.name?.trim() || null;
     const tabName = requestName || getFileTabName(filePath, requestIndex);
@@ -892,9 +1159,28 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     set((state) => ({
       tabs: [...state.tabs, tab],
       activeTabId: tab.id,
+      tabLimitNotice: null,
     }));
 
     return tab.id;
+  },
+  setTabLimitSettings: (settings) => {
+    set((state) => {
+      const nextSettings = normalizeTabLimitSettings({
+        ...state.tabLimitSettings,
+        ...settings,
+      });
+
+      saveTabLimitSettingsToStorage(nextSettings);
+
+      return {
+        tabLimitSettings: nextSettings,
+        tabLimitNotice: null,
+      };
+    });
+  },
+  clearTabLimitNotice: () => {
+    set({ tabLimitNotice: null });
   },
   syncQueryParamsToUrl: () => {
     const { tabs, activeTabId } = get();
@@ -927,10 +1213,10 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       }
 
       set((state) => ({
-        tabs: updateTabById(state.tabs, targetTabId, {
+        tabs: updateTabById(state.tabs, targetTabId, withInteraction({
           url: parsedUrl.toString(),
           isDirty: true,
-        }),
+        })),
       }));
     } catch {
       // Ignore malformed URLs while the user is typing.
@@ -952,10 +1238,10 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
 
     if (!url.trim()) {
       set((state) => ({
-        tabs: updateTabById(state.tabs, targetTabId, {
+        tabs: updateTabById(state.tabs, targetTabId, withInteraction({
           queryParams: [],
           isDirty: true,
-        }),
+        })),
       }));
       return;
     }
@@ -974,10 +1260,10 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       }
 
       set((state) => ({
-        tabs: updateTabById(state.tabs, targetTabId, {
+        tabs: updateTabById(state.tabs, targetTabId, withInteraction({
           queryParams: params,
           isDirty: true,
-        }),
+        })),
       }));
     } catch {
       // Ignore malformed URLs while the user is typing.
@@ -1011,6 +1297,10 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     if (!tab) {
       return;
     }
+
+    set((state) => ({
+      tabs: touchTabById(state.tabs, targetTabId, Date.now()),
+    }));
 
     const environmentVariables = getActiveEnvironmentVariableMap();
 

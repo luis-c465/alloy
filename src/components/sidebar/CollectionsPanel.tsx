@@ -180,7 +180,7 @@ export function CollectionsPanel() {
       }
 
       requests.forEach((request, index) => {
-        openRequestInTab(request, path, index);
+        void openRequestInTab(request, path, index);
       });
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : "Failed to open file");

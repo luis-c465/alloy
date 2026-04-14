@@ -231,7 +231,7 @@ export function CurlImportDialog({ open, onOpenChange }: CurlImportDialogProps) 
 
     try {
       const request = await importCurl(command);
-      createTab(requestToTabPatch(request));
+      void createTab(requestToTabPatch(request));
       setCurlCommand("");
       onOpenChange(false);
     } catch (importError) {

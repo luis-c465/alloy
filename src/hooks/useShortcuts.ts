@@ -129,14 +129,14 @@ export function useShortcuts({
       "Save Tab",
       "Save the active request tab",
     ),
-    createShortcut(
-      "Mod+N",
-      () => {
-        useRequestStore.getState().createTab();
-      },
-      "Tabs",
-      "New Tab",
-      "Create a new request tab",
+      createShortcut(
+        "Mod+N",
+        () => {
+          void useRequestStore.getState().createTab();
+        },
+        "Tabs",
+        "New Tab",
+        "Create a new request tab",
     ),
     createShortcut(
       "Mod+W",

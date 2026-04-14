@@ -249,7 +249,7 @@ export function HistoryPanel() {
       return;
     }
 
-    createTab(mapHistoryEntryToTab(entry));
+    void createTab(mapHistoryEntryToTab(entry));
   };
 
   const handleDelete = async (id: number) => {
