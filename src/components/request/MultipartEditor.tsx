@@ -1,7 +1,14 @@
+import { useMemo, useState } from "react";
 import { IconUpload, IconX } from "@tabler/icons-react";
+import { useDefaultLayout } from "react-resizable-panels";
 
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "~/components/ui/resizable";
 import { VariableInput } from "~/components/ui/VariableInput";
 import {
   Select,
@@ -113,11 +120,40 @@ const detectContentType = (fileName: string): string | null => {
 };
 
 export function MultipartEditor() {
+  const outerLayoutState = useDefaultLayout({
+    id: "request-multipart-key-trailing-columns",
+    panelIds: ["key", "trailing"],
+    storage: window.localStorage,
+  });
+  const valueContentLayoutState = useDefaultLayout({
+    id: "request-multipart-value-content-columns",
+    panelIds: ["value", "contentType"],
+    storage: window.localStorage,
+  });
+  const [outerLayout, setOuterLayout] = useState<Record<string, number>>(
+    outerLayoutState.defaultLayout ?? { key: 26, trailing: 74 },
+  );
+  const [valueContentLayout, setValueContentLayout] = useState<Record<string, number>>(
+    valueContentLayoutState.defaultLayout ?? { value: 70, contentType: 30 },
+  );
+
   const items = useRequestStore((state) => state.tabs.find(
     (tab) => tab.id === (state.activeTabId ?? state.tabs[0]?.id),
   )?.multipartFields ?? EMPTY_MULTIPART_FIELDS);
   const setMultipartFields = useRequestStore((state) => state.setMultipartFields);
   const rows = items.length > 0 ? items : [createEmptyRow()];
+
+  const rowGridTemplate = useMemo(() => {
+    const key = outerLayout.key ?? 26;
+    const trailing = outerLayout.trailing ?? 74;
+    const valueInTrailing = valueContentLayout.value ?? 70;
+    const contentInTrailing = valueContentLayout.contentType ?? 30;
+
+    const value = (trailing * valueInTrailing) / 100;
+    const contentType = (trailing * contentInTrailing) / 100;
+
+    return `40px minmax(120px, ${key}fr) 110px minmax(180px, ${value}fr) minmax(140px, ${contentType}fr) 36px`;
+  }, [outerLayout, valueContentLayout]);
 
   const updateRows = (nextRows: MultipartField[]) => {
     setMultipartFields(ensureTrailingEmptyRow(nextRows));
@@ -182,12 +218,49 @@ export function MultipartEditor() {
   return (
     <TooltipProvider>
       <div className="h-full overflow-auto rounded-md border border-border">
-        <div className="grid min-w-[900px] grid-cols-[40px_1.2fr_110px_1.8fr_160px_36px] border-b border-border bg-muted/40 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="grid min-w-[900px] grid-cols-[40px_1fr_36px] border-b border-border bg-muted/40 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           <span className="text-center">On</span>
-          <span>Key</span>
-          <span>Type</span>
-          <span>Value</span>
-          <span>Content Type</span>
+
+          <ResizablePanelGroup
+            orientation="horizontal"
+            id="request-multipart-key-trailing-columns"
+            defaultLayout={outerLayoutState.defaultLayout}
+            onLayoutChange={setOuterLayout}
+            onLayoutChanged={outerLayoutState.onLayoutChanged}
+            className="min-w-0 items-center h-full"
+          >
+            <ResizablePanel id="key" minSize="16%" defaultSize="26%">
+              <span className="block px-1">Key</span>
+            </ResizablePanel>
+
+            <ResizableHandle withHandle className="mx-1 bg-border/80" />
+
+            <ResizablePanel id="trailing" minSize="30%" defaultSize="74%">
+              <div className="grid h-full min-w-0 grid-cols-[110px_1fr] items-center">
+                <span className="px-1">Type</span>
+
+                <ResizablePanelGroup
+                  orientation="horizontal"
+                  id="request-multipart-value-content-columns"
+                  defaultLayout={valueContentLayoutState.defaultLayout}
+                  onLayoutChange={setValueContentLayout}
+                  onLayoutChanged={valueContentLayoutState.onLayoutChanged}
+                  className="min-w-0 items-center"
+                >
+                  <ResizablePanel id="value" minSize="25%" defaultSize="70%">
+                    <span className="block px-1">Value</span>
+                  </ResizablePanel>
+
+                  <ResizableHandle withHandle className="mx-1 bg-border/80 w-[12px]!" />
+
+                  <ResizablePanel id="contentType" minSize="15%" defaultSize="30%">
+                    <span className="block px-1">Content Type</span>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+
           <span className="sr-only">Delete</span>
         </div>
 
@@ -204,7 +277,8 @@ export function MultipartEditor() {
             return (
               <div
                 key={row.id}
-                className="grid grid-cols-[40px_1.2fr_110px_1.8fr_160px_36px] items-center gap-2 px-2 py-1.5"
+                className="grid items-center gap-2 px-2 py-1.5"
+                style={{ gridTemplateColumns: rowGridTemplate }}
               >
                 <div className="flex justify-center">
                   <input
