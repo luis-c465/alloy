@@ -122,6 +122,7 @@ export function AuthEditor() {
               value={authBearer}
               placeholder="Enter token..."
               onChange={setAuthBearer}
+              singleLine
               className="h-9"
             />
             <p className="text-xs text-muted-foreground">
@@ -151,6 +152,7 @@ export function AuthEditor() {
               value={authBasicUsername}
               placeholder="Enter username..."
               onChange={setAuthBasicUsername}
+              singleLine
               className="h-9"
             />
           </div>

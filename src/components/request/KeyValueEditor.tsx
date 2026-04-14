@@ -98,6 +98,7 @@ export function KeyValueEditor({
               value={item.value}
               placeholder={valuePlaceholder}
               onChange={(value) => updateRow(item.id, { value })}
+              singleLine
               className="h-7 rounded-sm"
             />
 

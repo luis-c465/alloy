@@ -1,4 +1,5 @@
 import { oneDark } from "@codemirror/theme-one-dark"
+import { EditorState } from "@codemirror/state"
 import { EditorView, keymap } from "@codemirror/view"
 import CodeMirror, { type Extension } from "@uiw/react-codemirror"
 import { useMemo } from "react"
@@ -15,6 +16,7 @@ interface VariableInputProps {
   placeholder?: string
   className?: string
   readOnly?: boolean
+  singleLine?: boolean
 }
 
 export function VariableInput({
@@ -24,6 +26,7 @@ export function VariableInput({
   placeholder,
   className,
   readOnly,
+  singleLine,
 }: VariableInputProps) {
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme)
   const variables = useEnvironmentVariables()
@@ -38,8 +41,12 @@ export function VariableInput({
           fontSize: "12px",
           height: "100%",
         },
+        "&.cm-theme":{
+          width: "100%"
+        },
         ".cm-editor": {
           outline: "none",
+          width: "100%",
         },
         ".cm-focused": {
           outline: "none",
@@ -77,8 +84,19 @@ export function VariableInput({
           run: () => false,
         },
       ]),
+      ...(singleLine
+        ? [
+            EditorState.transactionFilter.of((tr) => {
+              if (!tr.docChanged) return tr
+              let newText = tr.newDoc.toString()
+              if (!newText.includes("\n")) return tr
+              newText = newText.replace(/\n/g, "")
+              return [tr, { changes: { from: 0, to: tr.newDoc.length, insert: newText } }]
+            }),
+          ]
+        : []),
     ]
-  }, [variables, onEnter])
+  }, [variables, onEnter, singleLine])
 
   return (
     <div

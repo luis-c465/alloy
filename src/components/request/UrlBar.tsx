@@ -30,6 +30,7 @@ export function UrlBar() {
       placeholder="Enter request URL..."
       onChange={handleChange}
       onEnter={handleEnter}
+      singleLine
       className="h-8 flex-1"
     />
   );

@@ -248,6 +248,7 @@ export function MultipartEditor() {
                     onChange={(value) =>
                       updateRow(row.id, { value: { Text: value } })
                     }
+                    singleLine
                     className="h-7 rounded-sm"
                   />
                 ) : (

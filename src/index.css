@@ -216,3 +216,8 @@
   color: var(--popover-foreground);
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
+
+/** Ensure CodeMirror themes take full width of their container, preventing unwanted horizontal scrolling */
+.cm-theme {
+  width: 100%;
+}
