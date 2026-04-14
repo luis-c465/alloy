@@ -9,9 +9,6 @@ import {
 } from "@tabler/icons-react";
 
 import { EnvironmentSelector } from "~/components/environment/EnvironmentSelector";
-import { CurlExportDialog } from "~/components/import-export/CurlExportDialog";
-import { CurlImportDialog } from "~/components/import-export/CurlImportDialog";
-import { PostmanImportDialog } from "~/components/import-export/PostmanImportDialog";
 import { SettingsDialog } from "~/components/layout/SettingsDialog";
 import { ThemeToggle } from "~/components/layout/ThemeToggle";
 import { OpenWorkspaceDialog } from "~/components/workspace/OpenWorkspaceDialog";
@@ -30,20 +27,23 @@ type ToolbarProps = {
   workspaceName?: string | null;
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  onOpenImportDialog: () => void;
+  onOpenExportDialog: () => void;
+  onOpenPostmanImportDialog: () => void;
 };
 
 export function Toolbar({
   workspaceName,
   isSidebarCollapsed,
   onToggleSidebar,
+  onOpenImportDialog,
+  onOpenExportDialog,
+  onOpenPostmanImportDialog,
 }: ToolbarProps) {
   const activeTab = useActiveTab();
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const workspaceNameFromStore = useWorkspaceStore((state) => state.workspaceName);
   const setWorkspace = useWorkspaceStore((state) => state.setWorkspace);
-  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
-  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
-  const [isPostmanImportDialogOpen, setIsPostmanImportDialogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const activeWorkspaceName = workspaceName ?? workspaceNameFromStore;
@@ -117,7 +117,7 @@ export function Toolbar({
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem
                 onSelect={() => {
-                  setIsImportDialogOpen(true);
+                  onOpenImportDialog();
                 }}
               >
                 <IconTerminal2 className="size-3.5" />
@@ -126,7 +126,7 @@ export function Toolbar({
               <DropdownMenuItem
                 disabled={!activeTab}
                 onSelect={() => {
-                  setIsExportDialogOpen(true);
+                  onOpenExportDialog();
                 }}
               >
                 <IconTerminal2 className="size-3.5" />
@@ -135,7 +135,7 @@ export function Toolbar({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => {
-                  setIsPostmanImportDialogOpen(true);
+                  onOpenPostmanImportDialog();
                 }}
               >
                 Import Postman Collection
@@ -161,12 +161,6 @@ export function Toolbar({
         </div>
       </header>
 
-      <CurlImportDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen} />
-      <CurlExportDialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen} />
-      <PostmanImportDialog
-        open={isPostmanImportDialogOpen}
-        onOpenChange={setIsPostmanImportDialogOpen}
-      />
       <SettingsDialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
     </>
   );

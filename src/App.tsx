@@ -11,6 +11,9 @@ import { Sidebar } from "~/components/layout/Sidebar";
 import { ShortcutPalette } from "~/components/layout/ShortcutPalette";
 import { TabBar } from "~/components/layout/TabBar";
 import { Toolbar } from "~/components/layout/Toolbar";
+import { CurlExportDialog } from "~/components/import-export/CurlExportDialog";
+import { CurlImportDialog } from "~/components/import-export/CurlImportDialog";
+import { PostmanImportDialog } from "~/components/import-export/PostmanImportDialog";
 import { RequestPanel } from "~/components/request/RequestPanel";
 import { ResponsePanel } from "~/components/response/ResponsePanel";
 import { Button } from "~/components/ui/button";
@@ -78,6 +81,9 @@ export default function App() {
   const [saveAsState, setSaveAsState] = useState<SaveAsState>(null);
   const [tabLimitPromptState, setTabLimitPromptState] = useState<TabLimitPromptState>(null);
   const [isShortcutPaletteOpen, setIsShortcutPaletteOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isPostmanImportDialogOpen, setIsPostmanImportDialogOpen] = useState(false);
   const allowWindowCloseRef = useRef(false);
   const initTheme = useThemeStore((state) => state.initTheme);
   const initWorkspace = useWorkspaceStore((state) => state.initWorkspace);
@@ -91,7 +97,6 @@ export default function App() {
   }, []);
 
   useShortcuts({
-    isPaletteOpen: isShortcutPaletteOpen,
     onOpenPalette: openShortcutPalette,
     onClosePalette: closeShortcutPalette,
   });
@@ -273,6 +278,15 @@ export default function App() {
         workspaceName={null}
         isSidebarCollapsed={isSidebarCollapsed}
         onToggleSidebar={toggleSidebar}
+        onOpenImportDialog={() => {
+          setIsImportDialogOpen(true);
+        }}
+        onOpenExportDialog={() => {
+          setIsExportDialogOpen(true);
+        }}
+        onOpenPostmanImportDialog={() => {
+          setIsPostmanImportDialogOpen(true);
+        }}
       />
 
       <PanelGroup
@@ -438,6 +452,23 @@ export default function App() {
       <ShortcutPalette
         open={isShortcutPaletteOpen}
         onOpenChange={setIsShortcutPaletteOpen}
+        onToggleSidebar={toggleSidebar}
+        onOpenImportDialog={() => {
+          setIsImportDialogOpen(true);
+        }}
+        onOpenExportDialog={() => {
+          setIsExportDialogOpen(true);
+        }}
+        onOpenPostmanImportDialog={() => {
+          setIsPostmanImportDialogOpen(true);
+        }}
+      />
+
+      <CurlImportDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen} />
+      <CurlExportDialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen} />
+      <PostmanImportDialog
+        open={isPostmanImportDialogOpen}
+        onOpenChange={setIsPostmanImportDialogOpen}
       />
 
       <Dialog

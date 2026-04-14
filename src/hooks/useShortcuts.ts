@@ -7,7 +7,6 @@ import { useRequestStore } from "~/stores/request-store";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
 type UseShortcutsOptions = {
-  isPaletteOpen: boolean;
   onOpenPalette: () => void;
   onClosePalette: () => void;
 };
@@ -106,7 +105,6 @@ const createShortcut = (
 });
 
 export function useShortcuts({
-  isPaletteOpen,
   onOpenPalette,
   onClosePalette,
 }: UseShortcutsOptions): void {
@@ -205,9 +203,8 @@ export function useShortcuts({
       "General",
       "Close Current Dialog",
       "Close the shortcut palette",
-      isPaletteOpen,
     ),
-  ]), [isPaletteOpen, onClosePalette, onOpenPalette]);
+  ]), [onClosePalette, onOpenPalette]);
 
   useHotkeys(defaultShortcuts);
 }
