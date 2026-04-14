@@ -73,7 +73,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="flex min-h-[75vh] max-h-[90vh] flex-col overflow-hidden sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
@@ -81,7 +81,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="appearance" className="gap-3">
+        <Tabs defaultValue="appearance" className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
           <TabsList variant="line" className="w-full justify-start border-b border-border p-0">
             <TabsTrigger value="appearance" className="rounded-none px-3">
               Appearance
@@ -127,12 +127,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             </div>
           </TabsContent>
 
-          <TabsContent value="shortcuts" className="space-y-3">
+          <TabsContent value="shortcuts" className="flex min-h-0 flex-1 flex-col space-y-3">
             <p className="text-xs text-muted-foreground">
               Registered keyboard shortcuts available in the current app session.
             </p>
 
-            <ScrollArea className="h-72 rounded-md border border-border bg-muted/10">
+            <ScrollArea className="min-h-0 flex-1 rounded-md border border-border bg-muted/10">
               <div className="space-y-3 p-3">
                 {CATEGORY_ORDER.map((category) => {
                   const categoryShortcuts = shortcutsByCategory.get(category) ?? [];

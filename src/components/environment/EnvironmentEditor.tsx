@@ -172,7 +172,7 @@ export function EnvironmentEditor({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="flex min-h-[75vh] max-h-[90vh] flex-col overflow-hidden sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>Manage Environments</DialogTitle>
           <DialogDescription>
@@ -180,7 +180,7 @@ export function EnvironmentEditor({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid h-[420px] grid-cols-[220px_1fr] gap-4">
+        <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr] gap-4">
           <div className="flex min-h-0 flex-col rounded-md border border-border">
             <div className="flex items-center justify-between border-b border-border p-2">
               <span className="text-xs font-medium text-muted-foreground">Environments</span>
