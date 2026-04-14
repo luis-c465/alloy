@@ -128,3 +128,91 @@
     @apply font-sans;
   }
 }
+
+/* VariableInput — CodeMirror mini-editor styled as an inline input */
+.variable-input-wrapper .cm-editor {
+  height: 100%;
+  background: transparent;
+}
+
+.variable-input-wrapper .cm-editor.cm-focused {
+  outline: none;
+}
+
+.variable-input-wrapper .cm-scroller {
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center;
+  height: 100%;
+}
+
+.variable-input-wrapper .cm-content {
+  padding: 0;
+}
+
+.variable-input-wrapper .cm-line {
+  padding: 0;
+}
+
+.variable-input-wrapper .cm-gutters {
+  display: none;
+}
+
+/* Hide scrollbar in variable inputs */
+.variable-input-wrapper .cm-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* Ensure cursor is always visible regardless of CM theme */
+.variable-input-wrapper .cm-cursor,
+.variable-input-wrapper .cm-dropCursor {
+  border-left-color: var(--foreground) !important;
+}
+
+/* Autocomplete popup styling refinements */
+.variable-input-wrapper .cm-tooltip-autocomplete {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* Variable hover tooltip — rendered in document.body via tooltips({ parent }) */
+.cm-tooltip.cm-tooltip-hover .cm-variable-tooltip {
+  padding: 6px 10px;
+  font-size: 12px;
+  min-width: 120px;
+  max-width: 400px;
+  width: max-content;
+}
+
+.cm-tooltip.cm-tooltip-hover .cm-variable-tooltip .cm-tooltip-label {
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: #ff8c00;
+  margin-bottom: 2px;
+}
+
+.cm-tooltip.cm-tooltip-hover .cm-variable-tooltip .cm-tooltip-value {
+  font-family: var(--font-mono);
+  word-break: break-all;
+  color: #374151;
+}
+
+.cm-tooltip.cm-tooltip-hover .cm-variable-tooltip .cm-tooltip-undefined {
+  color: #dc2626;
+  font-style: italic;
+}
+
+.dark .cm-tooltip.cm-tooltip-hover .cm-variable-tooltip .cm-tooltip-value {
+  color: #d1d5db;
+}
+
+.cm-tooltip.cm-tooltip-hover {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}

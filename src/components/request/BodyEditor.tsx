@@ -14,6 +14,8 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { useActiveTabField } from "~/hooks/useActiveTab";
+import { useEnvironmentVariables } from "~/hooks/useEnvironmentVariables";
+import { variableExtension } from "~/lib/codemirror/variable-extensions";
 import { cn } from "~/lib/utils";
 import { useRequestStore } from "~/stores/request-store";
 
@@ -41,6 +43,7 @@ export function BodyEditor() {
   const setBodyContent = useRequestStore((state) => state.setBodyContent);
   const setBodyFormData = useRequestStore((state) => state.setBodyFormData);
   const setRawContentType = useRequestStore((state) => state.setRawContentType);
+  const variables = useEnvironmentVariables();
 
   const rawNormalized = useMemo(() => {
     return RAW_TYPE_OPTIONS.some((option) => option.value === rawContentType)
@@ -48,18 +51,18 @@ export function BodyEditor() {
       : "text/plain";
   }, [rawContentType]);
 
-  const jsonExtensions = useMemo(() => [json()], []);
+  const jsonExtensions = useMemo(() => [json(), variableExtension(variables)], [variables]);
   const rawExtensions = useMemo(() => {
     if (rawNormalized.includes("xml")) {
-      return [xml()];
+      return [xml(), variableExtension(variables)];
     }
 
     if (rawNormalized.includes("html")) {
-      return [html()];
+      return [html(), variableExtension(variables)];
     }
 
-    return [];
-  }, [rawNormalized]);
+    return [variableExtension(variables)];
+  }, [rawNormalized, variables]);
 
   const handleBodyChange = useCallback(
     (value: string) => {
@@ -134,7 +137,6 @@ export function BodyEditor() {
           onChange={handleBodyChange}
           extensions={jsonExtensions}
           minHeight="100px"
-          autocompletion
           className="min-h-0 flex-1 overflow-hidden"
         />
       ) : null}
@@ -145,7 +147,6 @@ export function BodyEditor() {
           onChange={handleBodyChange}
           extensions={rawExtensions}
           minHeight="100px"
-          autocompletion
           className="min-h-0 flex-1 overflow-hidden"
         />
       ) : null}

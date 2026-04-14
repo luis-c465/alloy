@@ -3,6 +3,7 @@ import { IconX } from "@tabler/icons-react";
 
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { VariableInput } from "~/components/ui/VariableInput";
 import { cn } from "~/lib/utils";
 import { createEmptyKeyValue, type KeyValue } from "~/stores/request-store";
 
@@ -93,16 +94,11 @@ export function KeyValueEditor({
               )}
             />
 
-            <Input
+            <VariableInput
               value={item.value}
               placeholder={valuePlaceholder}
-              onChange={(event) =>
-                updateRow(item.id, { value: event.target.value })
-              }
-              className={cn(
-                "h-7 rounded-sm border-input/70 bg-transparent text-xs",
-                "font-mono",
-              )}
+              onChange={(value) => updateRow(item.id, { value })}
+              className="h-7 rounded-sm"
             />
 
             <Button

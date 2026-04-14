@@ -1,9 +1,7 @@
-import { useCallback, useRef } from "react";
-
-import { useHotkey } from "@tanstack/react-hotkeys";
+import { useCallback } from "react";
 
 import { useActiveTabField } from "~/hooks/useActiveTab";
-import { Input } from "~/components/ui/input";
+import { VariableInput } from "~/components/ui/VariableInput";
 import { useRequestStore } from "~/stores/request-store";
 
 export function UrlBar() {
@@ -13,29 +11,26 @@ export function UrlBar() {
     (state) => state.syncUrlToQueryParams,
   );
   const sendRequest = useRequestStore((state) => state.sendRequest);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleChange = useCallback((value: string) => {
-    setUrl(value);
-    syncUrlToQueryParams();
-  }, [setUrl, syncUrlToQueryParams]);
-
-  useHotkey(
-    "Enter",
-    () => {
-      void sendRequest();
+  const handleChange = useCallback(
+    (value: string) => {
+      setUrl(value);
+      syncUrlToQueryParams();
     },
-    { target: inputRef, ignoreInputs: false, preventDefault: true },
+    [setUrl, syncUrlToQueryParams],
   );
 
+  const handleEnter = useCallback(() => {
+    void sendRequest();
+  }, [sendRequest]);
+
   return (
-    <Input
-      type="text"
+    <VariableInput
       value={url}
       placeholder="Enter request URL..."
-      onChange={(event) => handleChange(event.target.value)}
-      ref={inputRef}
-      className="h-8 flex-1 font-mono text-sm"
+      onChange={handleChange}
+      onEnter={handleEnter}
+      className="h-8 flex-1"
     />
   );
 }

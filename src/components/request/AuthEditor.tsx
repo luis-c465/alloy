@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { VariableInput } from "~/components/ui/VariableInput";
 import { cn } from "~/lib/utils";
 import type { KeyValue } from "~/bindings";
 import { useWorkspaceStore } from "~/stores/workspace-store";
@@ -117,12 +118,11 @@ export function AuthEditor() {
             >
               Token
             </label>
-            <Input
-              id="auth-bearer-token"
+            <VariableInput
               value={authBearer}
               placeholder="Enter token..."
-              onChange={(event) => setAuthBearer(event.target.value)}
-              className="font-mono"
+              onChange={setAuthBearer}
+              className="h-9"
             />
             <p className="text-xs text-muted-foreground">
               Supports <span className="font-mono">{"{{variable}}"}</span>
@@ -147,12 +147,11 @@ export function AuthEditor() {
             >
               Username
             </label>
-            <Input
-              id="auth-basic-username"
+            <VariableInput
               value={authBasicUsername}
               placeholder="Enter username..."
-              onChange={(event) => setAuthBasicUsername(event.target.value)}
-              className="font-mono"
+              onChange={setAuthBasicUsername}
+              className="h-9"
             />
           </div>
 

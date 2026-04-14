@@ -2,6 +2,7 @@ import { IconUpload, IconX } from "@tabler/icons-react";
 
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { VariableInput } from "~/components/ui/VariableInput";
 import {
   Select,
   SelectContent,
@@ -241,16 +242,13 @@ export function MultipartEditor() {
                 </Select>
 
                 {valueType === "text" ? (
-                  <Input
+                  <VariableInput
                     value={isTextValue(row) ? row.value.Text : ""}
                     placeholder="Value"
-                    onChange={(event) =>
-                      updateRow(row.id, { value: { Text: event.target.value } })
+                    onChange={(value) =>
+                      updateRow(row.id, { value: { Text: value } })
                     }
-                    className={cn(
-                      "h-7 rounded-sm border-input/70 bg-transparent text-xs",
-                      "font-mono",
-                    )}
+                    className="h-7 rounded-sm"
                   />
                 ) : (
                   <div className="flex min-w-0 items-center gap-2 rounded-sm border border-input/70 bg-transparent px-2 py-1">
