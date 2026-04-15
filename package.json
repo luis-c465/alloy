@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",
@@ -44,6 +45,7 @@
     "@types/node": "^25.6.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@typescript/native-preview": "^7.0.0-dev.20260415.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "typescript": "~5.8.3",
     "vite": "^8.0.8"
