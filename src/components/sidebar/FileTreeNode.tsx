@@ -16,6 +16,7 @@ import { cn } from "~/lib/utils";
 
 import { FileTreeContextMenu } from "./FileTreeContextMenu";
 import { useFileTreeContext } from "./FileTreeContext";
+import { PendingCreationRow } from "./PendingCreationRow";
 
 type FileTreeNodeProps = {
   entry: FileEntry;
@@ -38,13 +39,18 @@ export const FileTreeNode = memo(function FileTreeNode({
     activeFilePath,
     selectedPath,
     expandedState,
+    isBusy,
     renamingPath,
     renameDraft,
+    pendingCreation,
     onSelect,
     onToggleDirectory,
     onOpenFile,
     onCreateFile,
     onCreateFolder,
+    onPendingNameChange,
+    onSubmitCreate,
+    onCancelCreate,
     onBeginRename,
     onRenameDraftChange,
     onSubmitRename,
@@ -59,6 +65,7 @@ export const FileTreeNode = memo(function FileTreeNode({
   const isSelected = selectedPath === entry.path;
   const isExpanded = isDirectory ? (expandedState[entry.path] ?? defaultExpanded) : false;
   const children = useMemo(() => entry.children ?? [], [entry.children]);
+  const pendingCreationChild = pendingCreation?.parentPath === entry.path ? pendingCreation : null;
 
   useEffect(() => {
     if (!isSelected) {
@@ -219,8 +226,19 @@ export const FileTreeNode = memo(function FileTreeNode({
         />
       </div>
 
-      {isDirectory && isExpanded && children.length > 0 ? (
+      {isDirectory && isExpanded && (children.length > 0 || pendingCreationChild) ? (
         <div>
+          {pendingCreationChild ? (
+            <PendingCreationRow
+              type={pendingCreationChild.type}
+              name={pendingCreationChild.name}
+              depth={depth + 1}
+              isBusy={isBusy}
+              onNameChange={onPendingNameChange}
+              onSubmit={onSubmitCreate}
+              onCancel={onCancelCreate}
+            />
+          ) : null}
           {children.map((child) => (
             <FileTreeNode
               key={child.path}

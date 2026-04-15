@@ -2,17 +2,28 @@ import { createContext, type ReactNode, useContext } from "react";
 
 import type { FileEntry } from "~/bindings";
 
+export type PendingCreation = {
+  type: "file" | "folder";
+  parentPath: string;
+  name: string;
+};
+
 export type FileTreeContextValue = {
   activeFilePath: string | null;
   selectedPath: string | null;
   expandedState: Record<string, boolean>;
+  isBusy: boolean;
   renamingPath: string | null;
   renameDraft: string;
+  pendingCreation: PendingCreation | null;
   onSelect: (entry: FileEntry) => void;
   onToggleDirectory: (path: string, expanded: boolean) => void;
   onOpenFile: (path: string) => void;
   onCreateFile: (parentPath: string) => void;
   onCreateFolder: (parentPath: string) => void;
+  onPendingNameChange: (value: string) => void;
+  onSubmitCreate: () => void;
+  onCancelCreate: () => void;
   onBeginRename: (entry: FileEntry) => void;
   onRenameDraftChange: (value: string) => void;
   onSubmitRename: () => void;
@@ -31,13 +42,18 @@ export function FileTreeContextProvider({
   activeFilePath,
   selectedPath,
   expandedState,
+  isBusy,
   renamingPath,
   renameDraft,
+  pendingCreation,
   onSelect,
   onToggleDirectory,
   onOpenFile,
   onCreateFile,
   onCreateFolder,
+  onPendingNameChange,
+  onSubmitCreate,
+  onCancelCreate,
   onBeginRename,
   onRenameDraftChange,
   onSubmitRename,
@@ -50,13 +66,18 @@ export function FileTreeContextProvider({
         activeFilePath,
         selectedPath,
         expandedState,
+        isBusy,
         renamingPath,
         renameDraft,
+        pendingCreation,
         onSelect,
         onToggleDirectory,
         onOpenFile,
         onCreateFile,
         onCreateFolder,
+        onPendingNameChange,
+        onSubmitCreate,
+        onCancelCreate,
         onBeginRename,
         onRenameDraftChange,
         onSubmitRename,

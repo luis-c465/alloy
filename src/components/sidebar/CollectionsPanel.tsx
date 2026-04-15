@@ -3,13 +3,11 @@ import {
   IconFolderPlus,
   IconRefresh,
 } from "@tabler/icons-react";
-import { useHotkey } from "@tanstack/react-hotkeys";
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 
 import type { FileEntry } from "~/bindings";
 import { OpenWorkspaceDialog } from "~/components/workspace/OpenWorkspaceDialog";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -37,13 +35,9 @@ import { FILE_TREE_INITIAL_EXPANSION_DEPTH } from "~/lib/constants";
 import { useRequestStore } from "~/stores/request-store";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 
-import { FileTreeContextProvider } from "./FileTreeContext";
+import { FileTreeContextProvider, type PendingCreation } from "./FileTreeContext";
 import { FileTreeNode } from "./FileTreeNode";
-
-type CreateMode =
-  | { type: "file"; parentPath: string }
-  | { type: "folder"; parentPath: string }
-  | null;
+import { PendingCreationRow } from "./PendingCreationRow";
 
 const findEntryByPath = (entries: FileEntry[], targetPath: string): FileEntry | null => {
   for (const entry of entries) {
@@ -102,15 +96,12 @@ export function CollectionsPanel() {
     (state) => state.tabs.find((tab) => tab.id === state.activeTabId)?.filePath ?? null,
   );
 
-  const [createMode, setCreateMode] = useState<CreateMode>(null);
-  const [createName, setCreateName] = useState("");
+  const [pendingCreation, setPendingCreation] = useState<PendingCreation | null>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [pendingDeleteEntry, setPendingDeleteEntry] = useState<FileEntry | null>(null);
-
-  const createInputRef = useRef<HTMLInputElement>(null);
 
   const selectedEntry = useMemo(() => {
     if (!selectedPath) {
@@ -131,12 +122,20 @@ export function CollectionsPanel() {
     return selectedEntry.is_dir ? selectedEntry.path : getParentPath(selectedEntry.path);
   }, [selectedEntry, workspacePath]);
 
-  const startCreate = (mode: Exclude<CreateMode, null>) => {
+  const startCreate = (mode: { type: "file" | "folder"; parentPath: string }) => {
     setError(null);
     setRenamingPath(null);
     setRenameDraft("");
-    setCreateMode(mode);
-    setCreateName(mode.type === "file" ? "new-request.http" : "new-folder");
+
+    if (mode.parentPath !== workspacePath) {
+      setPathExpanded(mode.parentPath, true);
+    }
+
+    setPendingCreation({
+      type: mode.type,
+      parentPath: mode.parentPath,
+      name: mode.type === "file" ? "new-request.http" : "new-folder",
+    });
   };
 
   const startCreateAtPath = (type: "file" | "folder", parentPath: string) => {
@@ -144,8 +143,7 @@ export function CollectionsPanel() {
   };
 
   const cancelCreate = () => {
-    setCreateMode(null);
-    setCreateName("");
+    setPendingCreation(null);
   };
 
   const handleRefresh = async () => {
@@ -194,22 +192,22 @@ export function CollectionsPanel() {
   };
 
   const handleCreateSubmit = async () => {
-    if (!workspacePath || !createMode || isBusy) {
+    if (!workspacePath || !pendingCreation || isBusy) {
       return;
     }
 
-    const rawName = createName.trim();
+    const rawName = pendingCreation.name.trim();
     if (!isValidName(rawName)) {
       setError("Invalid name. Avoid special characters and empty names.");
       return;
     }
 
-    if (createMode.type === "file" && !rawName.toLowerCase().endsWith(".http")) {
+    if (pendingCreation.type === "file" && !rawName.toLowerCase().endsWith(".http")) {
       setError("New files must use the .http extension.");
       return;
     }
 
-    const siblingNames = listSiblingNames(fileTree, createMode.parentPath);
+    const siblingNames = listSiblingNames(fileTree, pendingCreation.parentPath);
     if (siblingNames.has(rawName.toLowerCase())) {
       setError("A file or folder with that name already exists.");
       return;
@@ -218,10 +216,10 @@ export function CollectionsPanel() {
     setError(null);
     setIsBusy(true);
     try {
-      if (createMode.type === "file") {
-        await createHttpFile(createMode.parentPath, rawName);
+      if (pendingCreation.type === "file") {
+        await createHttpFile(pendingCreation.parentPath, rawName);
       } else {
-        await createDirectory(createMode.parentPath, rawName);
+        await createDirectory(pendingCreation.parentPath, rawName);
       }
 
       cancelCreate();
@@ -230,7 +228,7 @@ export function CollectionsPanel() {
       setError(
         createError instanceof Error
           ? createError.message
-          : `Failed to create ${createMode.type}`,
+          : `Failed to create ${pendingCreation.type}`,
       );
     } finally {
       setIsBusy(false);
@@ -278,8 +276,7 @@ export function CollectionsPanel() {
 
   const handleBeginRename = (entry: FileEntry) => {
     setError(null);
-    setCreateMode(null);
-    setCreateName("");
+    setPendingCreation(null);
     setRenamingPath(entry.path);
     setRenameDraft(entry.name);
     setSelectedPath(entry.path);
@@ -348,31 +345,27 @@ export function CollectionsPanel() {
     setRenameDraft("");
   };
 
-  useHotkey(
-    "Enter",
-    (event: KeyboardEvent) => {
-      event.preventDefault();
-      void handleCreateSubmit();
-    },
-    {
-      enabled: createMode !== null,
-      target: createInputRef,
-      ignoreInputs: false,
-    },
-  );
+  const handlePendingNameChange = (value: string) => {
+    setPendingCreation((current) => {
+      if (!current) {
+        return current;
+      }
 
-  useHotkey(
-    "Escape",
-    (event: KeyboardEvent) => {
-      event.preventDefault();
-      cancelCreate();
-    },
-    {
-      enabled: createMode !== null,
-      target: createInputRef,
-      ignoreInputs: false,
-    },
-  );
+      return { ...current, name: value };
+    });
+  };
+
+  const handleSubmitCreate = () => {
+    void handleCreateSubmit();
+  };
+
+  const selectedRootIndex = useMemo(() => {
+    if (!selectedPath) {
+      return -1;
+    }
+
+    return fileTree.findIndex((entry) => entry.path === selectedPath);
+  }, [fileTree, selectedPath]);
 
   if (!workspacePath) {
     return (
@@ -435,39 +428,6 @@ export function CollectionsPanel() {
         </Button>
       </div>
 
-      {createMode ? (
-        <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
-          <Input
-            ref={createInputRef}
-            value={createName}
-            autoFocus
-            className="h-6"
-            onChange={(event) => {
-              setCreateName(event.target.value);
-            }}
-          />
-          <Button
-            type="button"
-            size="xs"
-            disabled={isBusy}
-            onClick={() => {
-              void handleCreateSubmit();
-            }}
-          >
-            Create
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            disabled={isBusy}
-            onClick={cancelCreate}
-          >
-            Cancel
-          </Button>
-        </div>
-      ) : null}
-
       {error ? (
         <div className="border-b border-border px-2 py-1.5 text-xs text-destructive">{error}</div>
       ) : null}
@@ -518,8 +478,10 @@ export function CollectionsPanel() {
         activeFilePath={activeFilePath}
         selectedPath={selectedPath}
         expandedState={expandedState}
+        isBusy={isBusy}
         renamingPath={renamingPath}
         renameDraft={renameDraft}
+        pendingCreation={pendingCreation}
         onSelect={(entryToSelect) => {
           setSelectedPath(entryToSelect.path);
         }}
@@ -533,6 +495,9 @@ export function CollectionsPanel() {
         onCreateFolder={(parentPath) => {
           startCreateAtPath("folder", parentPath);
         }}
+        onPendingNameChange={handlePendingNameChange}
+        onSubmitCreate={handleSubmitCreate}
+        onCancelCreate={cancelCreate}
         onBeginRename={handleBeginRename}
         onRenameDraftChange={setRenameDraft}
         onSubmitRename={() => {
@@ -544,17 +509,45 @@ export function CollectionsPanel() {
         }}
       >
         <div className="min-h-0 flex-1 overflow-y-auto py-1">
-          {fileTree.length === 0 ? (
+          {fileTree.length === 0 && !pendingCreation ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">No files found.</div>
           ) : (
-            fileTree.map((entry) => (
-              <FileTreeNode
-                key={entry.path}
-                entry={entry}
-                depth={0}
-                defaultExpanded={0 < FILE_TREE_INITIAL_EXPANSION_DEPTH}
-              />
-            ))
+            <>
+              {pendingCreation?.parentPath === workspacePath &&
+              (fileTree.length === 0 || selectedRootIndex < 0) ? (
+                <PendingCreationRow
+                  type={pendingCreation.type}
+                  name={pendingCreation.name}
+                  depth={0}
+                  isBusy={isBusy}
+                  onNameChange={handlePendingNameChange}
+                  onSubmit={handleSubmitCreate}
+                  onCancel={cancelCreate}
+                />
+              ) : null}
+
+              {fileTree.map((entry, index) => (
+                <Fragment key={entry.path}>
+                  <FileTreeNode
+                    entry={entry}
+                    depth={0}
+                    defaultExpanded={0 < FILE_TREE_INITIAL_EXPANSION_DEPTH}
+                  />
+
+                  {pendingCreation?.parentPath === workspacePath && index === selectedRootIndex ? (
+                    <PendingCreationRow
+                      type={pendingCreation.type}
+                      name={pendingCreation.name}
+                      depth={0}
+                      isBusy={isBusy}
+                      onNameChange={handlePendingNameChange}
+                      onSubmit={handleSubmitCreate}
+                      onCancel={cancelCreate}
+                    />
+                  ) : null}
+                </Fragment>
+              ))}
+            </>
           )}
         </div>
       </FileTreeContextProvider>
