@@ -56,6 +56,19 @@ fn write_request(output: &mut String, request: &HttpFileRequest) {
         }
     }
 
+    for variable in &request.variables {
+        if !variable.enabled {
+            continue;
+        }
+
+        let key = variable.key.trim();
+        if key.is_empty() {
+            continue;
+        }
+
+        writeln!(output, "# @var {key} = {}", variable.value).unwrap();
+    }
+
     writeln!(output, "{} {} HTTP/1.1", request.method, request.url).unwrap();
 
     for header in &request.headers {
@@ -122,6 +135,11 @@ mod tests {
                     value: "application/json".to_string(),
                     enabled: true,
                 }],
+                variables: vec![KeyValue {
+                    key: "token".to_string(),
+                    value: "abc123".to_string(),
+                    enabled: true,
+                }],
                 body: Some("{\"hello\":\"world\"}".to_string()),
                 body_type: "json".to_string(),
                 commands: vec![("name".to_string(), Some("GetUsers".to_string()))],
@@ -137,6 +155,8 @@ mod tests {
         assert_eq!(reparsed.requests[0].url, "{{base_url}}/users");
         assert_eq!(reparsed.requests[0].headers.len(), 1);
         assert_eq!(reparsed.requests[0].headers[0].key, "Content-Type");
+        assert_eq!(reparsed.requests[0].variables.len(), 1);
+        assert_eq!(reparsed.requests[0].variables[0].key, "token");
         assert_eq!(
             reparsed.requests[0].body,
             Some("{\"hello\":\"world\"}".to_string())
@@ -153,6 +173,7 @@ mod tests {
                 method: "POST".to_string(),
                 url: "https://example.com/users".to_string(),
                 headers: vec![],
+                variables: vec![],
                 body: Some("@file:payload.json".to_string()),
                 body_type: "raw".to_string(),
                 commands: vec![],
@@ -184,6 +205,7 @@ mod tests {
                     value: "application/json".to_string(),
                     enabled: true,
                 }],
+                variables: vec![],
                 body: Some("@save:responses/users.json:{\"hello\":\"world\"}".to_string()),
                 body_type: "json".to_string(),
                 commands: vec![],

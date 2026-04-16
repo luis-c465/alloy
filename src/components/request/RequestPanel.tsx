@@ -8,6 +8,7 @@ import { ResolvedUrlPreview } from "~/components/request/ResolvedUrlPreview";
 import { RequestBreadcrumb } from "~/components/request/RequestBreadcrumb";
 import { SendButton } from "~/components/request/SendButton";
 import { UrlBar } from "~/components/request/UrlBar";
+import { VariablesEditor } from "~/components/request/VariablesEditor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { isRequestTab } from "~/lib/constants";
@@ -18,10 +19,14 @@ export function RequestPanel() {
   const authType = useActiveTabField("authType", "none");
   const skipSslVerification = useActiveTabField("skipSslVerification", false);
   const timeoutMs = useActiveTabField("timeoutMs", null);
+  const variables = useActiveTabField("variables", []);
   const setActiveRequestTab = useRequestStore(
     (state) => state.setActiveRequestTab,
   );
   const hasActiveOptions = skipSslVerification || timeoutMs !== null;
+  const hasActiveVariables = variables.some((variable) => (
+    variable.enabled && variable.key.trim().length > 0
+  ));
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -48,6 +53,15 @@ export function RequestPanel() {
             <TabsTrigger value="headers">Headers</TabsTrigger>
             <TabsTrigger value="body">Body</TabsTrigger>
             <TabsTrigger value="auth">Auth</TabsTrigger>
+            <TabsTrigger value="variables">
+              Variables
+              {hasActiveVariables ? (
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 rounded-full bg-primary"
+                />
+              ) : null}
+            </TabsTrigger>
             <TabsTrigger value="options">
               Options
               {hasActiveOptions ? (
@@ -82,6 +96,10 @@ export function RequestPanel() {
 
           <TabsContent value="auth" className="min-h-0 flex-1 overflow-auto">
             <AuthEditor />
+          </TabsContent>
+
+          <TabsContent value="variables" className="min-h-0 flex-1 overflow-auto">
+            <VariablesEditor />
           </TabsContent>
 
           <TabsContent value="options" className="min-h-0 flex-1 overflow-auto">

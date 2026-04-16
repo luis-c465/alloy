@@ -66,14 +66,17 @@ export function AuthEditor() {
 
   const previewValue = useMemo(() => {
     const environmentVariables = getEnvironmentVariableMap(activeEnvironmentVariables);
+    const requestVariables = getEnvironmentVariableMap(activeTab?.variables ?? []);
+    const variables = new Map([...environmentVariables, ...requestVariables]);
 
     return getAuthorizationHeaderValue(
       authType,
-      resolveTemplateString(authBearer, environmentVariables),
-      resolveTemplateString(authBasicUsername, environmentVariables),
-      resolveTemplateString(authBasicPassword, environmentVariables),
+      resolveTemplateString(authBearer, variables),
+      resolveTemplateString(authBasicUsername, variables),
+      resolveTemplateString(authBasicPassword, variables),
     );
   }, [
+    activeTab?.variables,
     activeEnvironmentVariables,
     authBasicPassword,
     authBasicUsername,
@@ -212,7 +215,7 @@ export function AuthEditor() {
 
         {activeEnvironment ? (
           <p className="text-xs text-muted-foreground">
-            Preview reflects variables from the active environment: {activeEnvironment}.
+            Preview reflects variables from the active environment ({activeEnvironment}) and request-level variables.
           </p>
         ) : null}
 

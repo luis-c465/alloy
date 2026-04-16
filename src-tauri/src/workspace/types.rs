@@ -14,6 +14,7 @@ pub struct HttpFileRequest {
     pub method: String,
     pub url: String,
     pub headers: Vec<KeyValue>,
+    pub variables: Vec<KeyValue>,
     pub body: Option<String>,
     pub body_type: String,
     pub commands: Vec<(String, Option<String>)>,

@@ -343,6 +343,7 @@ fn postman_item_to_http_request(
         method: normalized.method,
         url: normalized.url,
         headers: normalized.headers,
+        variables: Vec::new(),
         body: normalized.body,
         body_type: normalized.body_type,
         commands: Vec::new(),

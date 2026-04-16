@@ -45,6 +45,26 @@ impl ApiImpl {
         })
     }
 
+    fn merge_request_variables(
+        request: &HttpRequestData,
+        mut variables: HashMap<String, String>,
+    ) -> HashMap<String, String> {
+        for variable in request
+            .request_variables
+            .iter()
+            .filter(|variable| variable.enabled)
+        {
+            let key = variable.key.trim();
+            if key.is_empty() {
+                continue;
+            }
+
+            variables.insert(key.to_string(), variable.value.clone());
+        }
+
+        variables
+    }
+
     async fn resolve_with_environment(
         &self,
         request: HttpRequestData,
@@ -54,15 +74,19 @@ impl ApiImpl {
         match (workspace_path, environment_name) {
             (Some(workspace), Some(environment)) => {
                 let env = config::read_environment(Path::new(&workspace), &environment).await?;
-                let variables: HashMap<String, String> = env
+                let environment_variables: HashMap<String, String> = env
                     .variables
                     .into_iter()
                     .filter(|variable| variable.enabled)
                     .map(|variable| (variable.key, variable.value))
                     .collect();
+                let variables = Self::merge_request_variables(&request, environment_variables);
                 resolver::resolve_request(&self.hbs, &request, &variables)
             }
-            (None, None) => Ok(request),
+            (None, None) => {
+                let variables = Self::merge_request_variables(&request, HashMap::new());
+                resolver::resolve_request(&self.hbs, &request, &variables)
+            }
             _ => Err(AppError::RequestError(
                 "Both environment_name and workspace_path are required for environment resolution"
                     .to_string(),
@@ -219,5 +243,4 @@ fn key_values_as_pairs(values: &[KeyValue]) -> Vec<String> {
         .map(|item| format!("{}={}", item.key, item.value))
         .collect()
 }
-
 

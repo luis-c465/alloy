@@ -95,6 +95,7 @@ pub fn resolve_request(
         body,
         timeout_ms: request.timeout_ms,
         skip_ssl_verification: request.skip_ssl_verification,
+        request_variables: request.request_variables.clone(),
     })
 }
 
@@ -193,6 +194,7 @@ mod tests {
             body: RequestBody::Json("{\"name\":\"{{name}}\"}".to_string()),
             timeout_ms: Some(1_500),
             skip_ssl_verification: true,
+            request_variables: vec![],
         };
 
         let resolved = resolve_request(&hbs, &request, &variables).unwrap();
@@ -227,6 +229,7 @@ mod tests {
             }]),
             timeout_ms: None,
             skip_ssl_verification: false,
+            request_variables: vec![],
         };
 
         let resolved = resolve_request(&hbs, &request, &variables).unwrap();
@@ -267,6 +270,7 @@ mod tests {
             ]),
             timeout_ms: None,
             skip_ssl_verification: false,
+            request_variables: vec![],
         };
 
         let resolved = resolve_request(&hbs, &request, &variables).unwrap();

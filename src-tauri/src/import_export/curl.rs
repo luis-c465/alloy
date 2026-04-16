@@ -243,6 +243,7 @@ pub fn curl_to_request(curl_command: &str) -> Result<HttpRequestData, AppError> 
         body,
         timeout_ms,
         skip_ssl_verification,
+        request_variables: Vec::new(),
     })
 }
 
@@ -586,6 +587,7 @@ mod tests {
             body: RequestBody::Json("{\"name\":\"O'Reilly\"}".to_string()),
             timeout_ms: Some(2_500),
             skip_ssl_verification: true,
+            request_variables: Vec::new(),
         }
     }
 

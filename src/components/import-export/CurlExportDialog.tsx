@@ -30,13 +30,8 @@ type CurlExportDialogProps = {
 };
 
 const getBaseUrl = (url: string): string => {
-  try {
-    const parsedUrl = new URL(url);
-    parsedUrl.search = "";
-    return parsedUrl.toString();
-  } catch {
-    return url;
-  }
+  const queryIndex = url.indexOf("?");
+  return queryIndex === -1 ? url : url.slice(0, queryIndex);
 };
 
 const toApiKeyValue = (
@@ -85,8 +80,11 @@ const toApiMultipartField = (
 
 const buildExportRequest = (
   tab: Tab,
-  variables: Map<string, string>,
+  environmentVariables: Map<string, string>,
 ): HttpRequestData => {
+  const requestVariables = getEnvironmentVariableMap(tab.variables);
+  const variables = new Map([...environmentVariables, ...requestVariables]);
+
   const filteredHeaders = tab.headers.filter((header) => {
     if (!header.enabled || !header.key.trim()) {
       return false;
@@ -149,6 +147,7 @@ const buildExportRequest = (
     body,
     timeout_ms: tab.timeoutMs,
     skip_ssl_verification: tab.skipSslVerification,
+    request_variables: [],
   };
 };
 

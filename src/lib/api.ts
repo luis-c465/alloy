@@ -11,6 +11,7 @@ import type {
   HttpRequestData,
   HttpResponseData,
   ImportResult,
+  KeyValue,
   PickedFile,
 } from "~/bindings";
 
@@ -203,9 +204,10 @@ export const resolveUrlPreview = async (
   url: string,
   workspacePath: string,
   envName: string | null,
+  requestVariables: KeyValue[],
 ): Promise<string> => {
   return withApiError(
-    api.environment.resolve_url_preview(url, workspacePath, envName),
+    api.environment.resolve_url_preview(url, workspacePath, envName, requestVariables),
     "Failed to resolve URL preview",
   );
 };

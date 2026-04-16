@@ -45,6 +45,7 @@ pub struct HttpRequestData {
     pub body: RequestBody,
     pub timeout_ms: Option<u64>,
     pub skip_ssl_verification: bool,
+    pub request_variables: Vec<KeyValue>,
 }
 
 #[taurpc::ipc_type]

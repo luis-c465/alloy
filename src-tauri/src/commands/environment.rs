@@ -9,6 +9,7 @@ use crate::{
         types::{EnvironmentData, EnvironmentList},
     },
     error::AppError,
+    http::types::KeyValue,
 };
 
 #[taurpc::procedures(path = "environment", export_to = "../src/bindings.ts")]
@@ -29,12 +30,31 @@ pub trait EnvironmentApi {
         url: String,
         workspace_path: String,
         env_name: Option<String>,
+        request_variables: Vec<KeyValue>,
     ) -> Result<String, AppError>;
 }
 
 #[derive(Clone)]
 pub struct EnvironmentApiImpl {
     pub hbs: Arc<Handlebars<'static>>,
+}
+
+impl EnvironmentApiImpl {
+    fn merge_request_variables(
+        request_variables: Vec<KeyValue>,
+        mut variables: HashMap<String, String>,
+    ) -> HashMap<String, String> {
+        for variable in request_variables.into_iter().filter(|variable| variable.enabled) {
+            let key = variable.key.trim();
+            if key.is_empty() {
+                continue;
+            }
+
+            variables.insert(key.to_string(), variable.value);
+        }
+
+        variables
+    }
 }
 
 #[taurpc::resolvers]
@@ -91,19 +111,20 @@ impl EnvironmentApi for EnvironmentApiImpl {
         url: String,
         workspace_path: String,
         env_name: Option<String>,
+        request_variables: Vec<KeyValue>,
     ) -> Result<String, AppError> {
-        let Some(env_name) = env_name else {
-            return Ok(url);
+        let variables = if let Some(env_name) = env_name {
+            let workspace = validate_workspace_path(&workspace_path)?;
+            let env = config::read_environment(&workspace, &env_name).await?;
+            env.variables
+                .into_iter()
+                .filter(|variable| variable.enabled)
+                .map(|variable| (variable.key, variable.value))
+                .collect::<HashMap<_, _>>()
+        } else {
+            HashMap::new()
         };
-
-        let workspace = validate_workspace_path(&workspace_path)?;
-        let env = config::read_environment(&workspace, &env_name).await?;
-        let variables = env
-            .variables
-            .into_iter()
-            .filter(|variable| variable.enabled)
-            .map(|variable| (variable.key, variable.value))
-            .collect::<HashMap<_, _>>();
+        let variables = Self::merge_request_variables(request_variables, variables);
 
         resolve_template(&self.hbs, &url, &variables)
     }

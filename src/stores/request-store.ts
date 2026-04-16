@@ -63,6 +63,7 @@ export interface Tab {
   method: string;
   url: string;
   headers: KeyValue[];
+  variables: KeyValue[];
   queryParams: KeyValue[];
   bodyType: BodyType;
   bodyContent: string;
@@ -98,6 +99,7 @@ interface RequestStore {
   setMethod: (method: string) => void;
   setUrl: (url: string) => void;
   setHeaders: (headers: KeyValue[]) => void;
+  setVariables: (variables: KeyValue[]) => void;
   setQueryParams: (params: KeyValue[]) => void;
   setBodyType: (type: BodyType) => void;
   setBodyContent: (content: string) => void;
@@ -591,13 +593,8 @@ const getRequestHeaders = (
 };
 
 const getBaseUrl = (url: string): string => {
-  try {
-    const parsedUrl = new URL(url);
-    parsedUrl.search = "";
-    return parsedUrl.toString();
-  } catch {
-    return url;
-  }
+  const queryIndex = url.indexOf("?");
+  return queryIndex === -1 ? url : url.slice(0, queryIndex);
 };
 
 const parseQueryParamsFromUrl = (url: string): KeyValue[] => {
@@ -641,6 +638,7 @@ const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => ({
   method: "GET",
   url: "",
   headers: [createEmptyKeyValue()],
+  variables: [createEmptyKeyValue()],
   queryParams: [],
   bodyType: "none",
   bodyContent: "",
@@ -684,6 +682,7 @@ const duplicateTabData = (tab: Tab): Tab => createDefaultTab({
   method: tab.method,
   url: tab.url,
   headers: tab.headers.map(cloneKeyValue),
+  variables: tab.variables.map(cloneKeyValue),
   queryParams: tab.queryParams.map(cloneKeyValue),
   bodyType: tab.bodyType,
   bodyContent: tab.bodyContent,
@@ -815,6 +814,9 @@ const toHttpFileRequest = (
   url: tab.url,
   headers: tab.headers
     .filter((header) => header.enabled && header.key.trim().length > 0)
+    .map(toApiKeyValue),
+  variables: tab.variables
+    .filter((variable) => variable.enabled && variable.key.trim().length > 0)
     .map(toApiKeyValue),
   body: toHttpFileBody(tab),
   body_type: tab.bodyType,
@@ -1074,6 +1076,7 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
   setMethod: (method) => get().updateActiveTab(withInteraction({ method, isDirty: true })),
   setUrl: (url) => get().updateActiveTab(withInteraction({ url, isDirty: true })),
   setHeaders: (headers) => get().updateActiveTab(withInteraction({ headers, isDirty: true })),
+  setVariables: (variables) => get().updateActiveTab(withInteraction({ variables, isDirty: true })),
   setQueryParams: (queryParams) =>
     get().updateActiveTab(withInteraction({ queryParams, isDirty: true })),
   setBodyType: (bodyType) => get().updateActiveTab(withInteraction({ bodyType, isDirty: true })),
@@ -1136,6 +1139,7 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       method: request.method || "GET",
       url: request.url,
       headers: request.headers.map(fromApiKeyValue),
+      variables: request.variables.map(fromApiKeyValue),
       queryParams: parseQueryParamsFromUrl(request.url),
       bodyType: normalizedBodyType,
       bodyContent: request.body ?? "",
@@ -1303,11 +1307,13 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     }));
 
     const environmentVariables = getActiveEnvironmentVariableMap();
+    const requestVariables = getEnvironmentVariableMap(tab.variables);
+    const resolvedVariables = new Map([...environmentVariables, ...requestVariables]);
 
     const payload: HttpRequestData = {
       method: tab.method,
       url: getBaseUrl(tab.url),
-      headers: getRequestHeaders(tab, environmentVariables),
+      headers: getRequestHeaders(tab, resolvedVariables),
       query_params: tab.queryParams
         .filter((param) => param.enabled)
         .map(toApiKeyValue),
@@ -1320,6 +1326,9 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       ),
       timeout_ms: tab.timeoutMs,
       skip_ssl_verification: tab.skipSslVerification,
+      request_variables: tab.variables
+        .filter((variable) => variable.enabled && variable.key.trim().length > 0)
+        .map(toApiKeyValue),
     };
 
     const requestToken = getNextRequestToken(targetTabId);

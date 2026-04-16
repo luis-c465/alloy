@@ -1,4 +1,4 @@
-export const REQUEST_TABS = ["params", "headers", "body", "auth", "options"] as const;
+export const REQUEST_TABS = ["params", "headers", "body", "auth", "variables", "options"] as const;
 
 export const RESPONSE_TABS = ["body", "headers", "cookies"] as const;
 

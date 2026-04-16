@@ -6,9 +6,12 @@ use crate::{
     workspace::types::{HttpFileData, HttpFileRequest},
 };
 
+const REQUEST_VARIABLE_COMMAND: &str = "var";
+
 pub fn parse_http_file(content: &str, file_path: &str) -> Result<HttpFileData, AppError> {
     let rest_format = RestFormat::parse(content, RestFlavor::Generic)
         .map_err(|error| AppError::ParseError(format!("Failed to parse {file_path}: {error}")))?;
+    let request_variables_by_block = extract_request_variables_by_block(content);
 
     let variables = rest_format
         .variables
@@ -23,7 +26,8 @@ pub fn parse_http_file(content: &str, file_path: &str) -> Result<HttpFileData, A
     let requests = rest_format
         .requests
         .into_iter()
-        .map(|request| {
+        .enumerate()
+        .map(|(request_index, request)| {
             let headers: Vec<KeyValue> = request
                 .headers
                 .into_iter()
@@ -56,12 +60,23 @@ pub fn parse_http_file(content: &str, file_path: &str) -> Result<HttpFileData, A
             });
 
             let commands = request.commands.into_iter().collect();
+            let (command_variables, commands) = split_request_variables(commands);
+            let variables_from_block = request_variables_by_block
+                .get(request_index)
+                .cloned()
+                .unwrap_or_default();
+            let variables = if variables_from_block.is_empty() {
+                command_variables
+            } else {
+                variables_from_block
+            };
 
             HttpFileRequest {
                 name: request.name,
                 method: request.method.raw,
                 url: request.url.raw,
                 headers,
+                variables,
                 body,
                 body_type,
                 commands,
@@ -73,6 +88,96 @@ pub fn parse_http_file(content: &str, file_path: &str) -> Result<HttpFileData, A
         path: file_path.to_string(),
         requests,
         variables,
+    })
+}
+
+fn split_request_variables(
+    commands: Vec<(String, Option<String>)>,
+) -> (Vec<KeyValue>, Vec<(String, Option<String>)>) {
+    let mut variables = Vec::new();
+    let mut filtered_commands = Vec::new();
+
+    for (command, value) in commands {
+        if let Some(variable) = parse_request_variable(&command, value.as_deref()) {
+            variables.push(variable);
+            continue;
+        }
+
+        if command != REQUEST_VARIABLE_COMMAND && !command.starts_with("var ") {
+            filtered_commands.push((command, value));
+            continue;
+        }
+    }
+
+    (variables, filtered_commands)
+}
+
+fn extract_request_variables_by_block(content: &str) -> Vec<Vec<KeyValue>> {
+    let mut blocks = Vec::new();
+    let mut current_block: Option<usize> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("###") {
+            blocks.push(Vec::new());
+            current_block = Some(blocks.len() - 1);
+            continue;
+        }
+
+        let Some(block_index) = current_block else {
+            continue;
+        };
+
+        if let Some(variable) = parse_request_variable_line(trimmed) {
+            blocks[block_index].push(variable);
+        }
+    }
+
+    blocks
+}
+
+fn parse_request_variable_line(line: &str) -> Option<KeyValue> {
+    let content = line
+        .strip_prefix("# @var ")
+        .or_else(|| line.strip_prefix("// @var "))?;
+    let (key, value) = content.split_once('=')?;
+    build_request_variable(key.trim(), value.trim())
+}
+
+fn parse_request_variable(command: &str, value: Option<&str>) -> Option<KeyValue> {
+    let combined = if command == REQUEST_VARIABLE_COMMAND {
+        value?
+    } else if let Some(key_fragment) = command.strip_prefix("var ") {
+        match value {
+            Some(value_fragment) if !value_fragment.trim().is_empty() => {
+                return build_request_variable(
+                    key_fragment.trim(),
+                    value_fragment.trim_start_matches('=').trim(),
+                );
+            }
+            _ => key_fragment,
+        }
+    } else {
+        return None;
+    };
+
+    if let Some((key, value)) = combined.split_once('=') {
+        return build_request_variable(key.trim(), value.trim());
+    }
+
+    None
+}
+
+fn build_request_variable(key: &str, value: &str) -> Option<KeyValue> {
+    if key.is_empty() {
+        return None;
+    }
+
+    Some(KeyValue {
+        key: key.to_string(),
+        value: value.to_string(),
+        enabled: true,
     })
 }
 
@@ -123,6 +228,23 @@ mod tests {
         let request = &parsed.requests[0];
         assert_eq!(request.name.as_deref(), Some("GetUsers"));
         assert!(request.commands.iter().any(|(key, _)| key == "no-log"));
+        assert!(request.variables.is_empty());
+    }
+
+    #[test]
+    fn parse_request_level_variables_from_var_commands() {
+        let content = "###\n# @name GetUsers\n# @var base_url = https://example.com\n# @var token = abc123\nGET {{base_url}}/users HTTP/1.1\nAuthorization: Bearer {{token}}\n";
+
+        let parsed = parse_http_file(content, "request-vars.http").unwrap();
+
+        assert_eq!(parsed.requests.len(), 1);
+        let request = &parsed.requests[0];
+        assert_eq!(request.variables.len(), 2);
+        assert_eq!(request.variables[0].key, "base_url");
+        assert_eq!(request.variables[0].value, "https://example.com");
+        assert_eq!(request.variables[1].key, "token");
+        assert_eq!(request.variables[1].value, "abc123");
+        assert!(!request.commands.iter().any(|(key, _)| key == "var"));
     }
 
     #[test]

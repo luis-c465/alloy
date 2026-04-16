@@ -243,6 +243,7 @@ pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedRespons
         body,
         timeout_ms,
         skip_ssl_verification,
+        request_variables: _,
     } = request;
 
     let mut url = parse_url(&raw_url)?;
@@ -558,6 +559,7 @@ mod tests {
             body: RequestBody::None,
             timeout_ms: None,
             skip_ssl_verification: false,
+            request_variables: Vec::new(),
         };
 
         let response = execute_request(request)
@@ -600,6 +602,7 @@ mod tests {
             ]),
             timeout_ms: None,
             skip_ssl_verification: false,
+            request_variables: Vec::new(),
         };
 
         let response = execute_request(request)
@@ -648,6 +651,7 @@ mod tests {
             }]),
             timeout_ms: None,
             skip_ssl_verification: false,
+            request_variables: Vec::new(),
         };
 
         let error = match execute_request(request).await {
@@ -671,6 +675,7 @@ mod tests {
             body: RequestBody::None,
             timeout_ms: None,
             skip_ssl_verification: false,
+            request_variables: Vec::new(),
         };
 
         let response = execute_request(request)
@@ -716,6 +721,7 @@ mod tests {
             ]),
             timeout_ms: None,
             skip_ssl_verification: false,
+            request_variables: Vec::new(),
         };
 
         let response = execute_request(request)

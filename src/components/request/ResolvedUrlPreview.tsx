@@ -8,6 +8,7 @@ const HAS_TEMPLATE_VARIABLE = /\{\{\s*[^}]+\s*\}\}/;
 
 export function ResolvedUrlPreview() {
   const url = useActiveTabField("url", "");
+  const requestVariables = useActiveTabField("variables", []);
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const activeEnvironment = useWorkspaceStore((state) => state.activeEnvironment);
 
@@ -27,7 +28,7 @@ export function ResolvedUrlPreview() {
     let cancelled = false;
 
     const timeout = setTimeout(() => {
-      void resolveUrlPreview(url, workspacePath, activeEnvironment)
+      void resolveUrlPreview(url, workspacePath, activeEnvironment, requestVariables)
         .then((result) => {
           if (!cancelled) {
             setResolvedUrl(result.trim() ? result : null);
@@ -44,7 +45,7 @@ export function ResolvedUrlPreview() {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [activeEnvironment, url, workspacePath]);
+  }, [activeEnvironment, requestVariables, url, workspacePath]);
 
   if (!resolvedUrl) {
     return null;
