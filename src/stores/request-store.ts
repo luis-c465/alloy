@@ -124,6 +124,11 @@ interface RequestStore {
     filePath: string,
     requestIndex?: number,
   ) => Promise<string | null>;
+  focusOrOpenRequestInTab: (
+    request: HttpFileRequest,
+    filePath: string,
+    requestIndex?: number,
+  ) => Promise<string | null>;
   syncQueryParamsToUrl: () => void;
   syncUrlToQueryParams: () => void;
   saveTab: (id: string) => Promise<boolean>;
@@ -1167,6 +1172,16 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     }));
 
     return tab.id;
+  },
+  focusOrOpenRequestInTab: async (request, filePath, requestIndex = 0) => {
+    const existingTab = get().tabs.find(
+      (tab) => tab.filePath === filePath && tab.requestIndex === requestIndex,
+    );
+    if (existingTab) {
+      set({ activeTabId: existingTab.id });
+      return existingTab.id;
+    }
+    return get().openRequestInTab(request, filePath, requestIndex);
   },
   setTabLimitSettings: (settings) => {
     set((state) => {

@@ -91,7 +91,7 @@ export function CollectionsPanel() {
   const fileTreeQuery = useFileTree(workspacePath);
   const fileTree = fileTreeQuery.data ?? fallbackFileTree;
 
-  const openRequestInTab = useRequestStore((state) => state.openRequestInTab);
+  const focusOrOpenRequestInTab = useRequestStore((state) => state.focusOrOpenRequestInTab);
   const activeFilePath = useRequestStore(
     (state) => state.tabs.find((tab) => tab.id === state.activeTabId)?.filePath ?? null,
   );
@@ -182,7 +182,7 @@ export function CollectionsPanel() {
       }
 
       requests.forEach((request, index) => {
-        void openRequestInTab(request, path, index);
+        void focusOrOpenRequestInTab(request, path, index);
       });
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : "Failed to open file");
