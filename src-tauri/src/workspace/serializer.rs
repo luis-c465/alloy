@@ -69,6 +69,30 @@ fn write_request(output: &mut String, request: &HttpFileRequest) {
         writeln!(output, "# @var {key} = {}", variable.value).unwrap();
     }
 
+    if let Some(script) = &request.pre_request_script {
+        writeln!(output, "# @pre-request").unwrap();
+        for line in script.split('\n') {
+            if line.is_empty() {
+                writeln!(output, "#").unwrap();
+            } else {
+                writeln!(output, "# {line}").unwrap();
+            }
+        }
+        writeln!(output, "# @end-pre-request").unwrap();
+    }
+
+    if let Some(script) = &request.post_response_script {
+        writeln!(output, "# @post-response").unwrap();
+        for line in script.split('\n') {
+            if line.is_empty() {
+                writeln!(output, "#").unwrap();
+            } else {
+                writeln!(output, "# {line}").unwrap();
+            }
+        }
+        writeln!(output, "# @end-post-response").unwrap();
+    }
+
     writeln!(output, "{} {} HTTP/1.1", request.method, request.url).unwrap();
 
     for header in &request.headers {
@@ -143,6 +167,8 @@ mod tests {
                 body: Some("{\"hello\":\"world\"}".to_string()),
                 body_type: "json".to_string(),
                 commands: vec![("name".to_string(), Some("GetUsers".to_string()))],
+                pre_request_script: None,
+                post_response_script: None,
             }],
         };
 
@@ -177,6 +203,8 @@ mod tests {
                 body: Some("@file:payload.json".to_string()),
                 body_type: "raw".to_string(),
                 commands: vec![],
+                pre_request_script: None,
+                post_response_script: None,
             }],
         };
 
@@ -209,6 +237,8 @@ mod tests {
                 body: Some("@save:responses/users.json:{\"hello\":\"world\"}".to_string()),
                 body_type: "json".to_string(),
                 commands: vec![],
+                pre_request_script: None,
+                post_response_script: None,
             }],
         };
 
@@ -221,5 +251,43 @@ mod tests {
             reparsed.requests[0].body.as_deref(),
             Some("@save:responses/users.json:{\"hello\":\"world\"}")
         );
+    }
+
+    #[test]
+    fn serialize_round_trip_with_script_blocks() {
+        let data = HttpFileData {
+            path: "sample.http".to_string(),
+            variables: vec![],
+            requests: vec![HttpFileRequest {
+                name: Some("Users".to_string()),
+                method: "GET".to_string(),
+                url: "https://example.com/users".to_string(),
+                headers: vec![],
+                variables: vec![],
+                body: None,
+                body_type: "raw".to_string(),
+                commands: vec![],
+                pre_request_script: Some(
+                    "const start = Date.now();\nconsole.log(start);".to_string(),
+                ),
+                post_response_script: Some("console.log('done');".to_string()),
+            }],
+        };
+
+        let serialized = serialize_http_file(&data);
+        let reparsed = parse_http_file(&serialized, &data.path).unwrap();
+
+        assert_eq!(
+            reparsed.requests[0].pre_request_script,
+            Some("const start = Date.now();\nconsole.log(start);".to_string())
+        );
+        assert_eq!(
+            reparsed.requests[0].post_response_script,
+            Some("console.log('done');".to_string())
+        );
+        assert!(!reparsed.requests[0]
+            .commands
+            .iter()
+            .any(|(key, _)| key == "pre-request" || key == "post-response"));
     }
 }

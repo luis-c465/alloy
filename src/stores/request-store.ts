@@ -4,6 +4,7 @@ import type {
   HttpFileRequest,
   HttpRequestData,
   HttpResponseData,
+  ScriptResult,
   KeyValue as ApiKeyValue,
   MultipartField as ApiMultipartField,
   MultipartValue,
@@ -83,6 +84,8 @@ export interface Tab {
   skipSslVerification: boolean;
   timeoutMs: number | null;
   response: HttpResponseData | null;
+  preScriptResult: ScriptResult | null;
+  postScriptResult: ScriptResult | null;
   isLoading: boolean;
   error: string | null;
   activeRequestTab: RequestTab;
@@ -94,6 +97,8 @@ export interface Tab {
   folderAuthBearer: string;
   folderAuthBasicUsername: string;
   folderAuthBasicPassword: string;
+  preRequestScript: string;
+  postResponseScript: string;
   lastInteractedAt: number;
 }
 
@@ -119,6 +124,8 @@ interface RequestStore {
   setBodyFormData: (data: KeyValue[]) => void;
   setMultipartFields: (fields: MultipartField[]) => void;
   setRawContentType: (contentType: string) => void;
+  setPreRequestScript: (script: string) => void;
+  setPostResponseScript: (script: string) => void;
   setAuthType: (authType: AuthType) => void;
   setAuthBearer: (authBearer: string) => void;
   setAuthBasicUsername: (authBasicUsername: string) => void;
@@ -706,6 +713,10 @@ const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => {
     skipSslVerification: false,
     timeoutMs: null,
     response: null,
+    preScriptResult: null,
+    postScriptResult: null,
+    preRequestScript: "",
+    postResponseScript: "",
     isLoading: false,
     error: null,
     activeRequestTab: "params",
@@ -766,6 +777,10 @@ const duplicateTabData = (tab: Tab): Tab => createDefaultTab({
   response: null,
   isLoading: false,
   error: null,
+  preRequestScript: tab.preRequestScript,
+  postResponseScript: tab.postResponseScript,
+  preScriptResult: null,
+  postScriptResult: null,
   activeRequestTab: tab.activeRequestTab,
   activeResponseTab: tab.activeResponseTab,
 });
@@ -884,19 +899,27 @@ const toHttpFileRequest = (
       url: "",
       headers: [],
       variables: [],
+      pre_request_script: null,
+      post_response_script: null,
       body: null,
       body_type: "none",
       commands,
     };
   }
 
-  return {
-    name: tab.requestName?.trim() || null,
-    method: tab.method || "GET",
-    url: tab.url,
-    headers: tab.headers
-      .filter((header) => header.enabled && header.key.trim().length > 0)
-      .map(toApiKeyValue),
+    return {
+      name: tab.requestName?.trim() || null,
+      method: tab.method || "GET",
+      url: tab.url,
+      pre_request_script: tab.preRequestScript.trim()
+        ? tab.preRequestScript
+        : null,
+      post_response_script: tab.postResponseScript.trim()
+        ? tab.postResponseScript
+        : null,
+      headers: tab.headers
+        .filter((header) => header.enabled && header.key.trim().length > 0)
+        .map(toApiKeyValue),
     variables: tab.variables
       .filter((variable) => variable.enabled && variable.key.trim().length > 0)
       .map(toApiKeyValue),
@@ -1195,6 +1218,10 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     get().updateActiveTab(withInteraction({ multipartFields, isDirty: true })),
   setRawContentType: (rawContentType) =>
     get().updateActiveTab(withInteraction({ rawContentType, isDirty: true })),
+  setPreRequestScript: (script) =>
+    get().updateActiveTab(withInteraction({ preRequestScript: script, isDirty: true })),
+  setPostResponseScript: (script) =>
+    get().updateActiveTab(withInteraction({ postResponseScript: script, isDirty: true })),
   setAuthType: (authType) => get().updateActiveTab(withInteraction({ authType, isDirty: true })),
   setAuthBearer: (authBearer) => get().updateActiveTab(withInteraction({ authBearer, isDirty: true })),
   setAuthBasicUsername: (authBasicUsername) =>
@@ -1259,6 +1286,10 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       queryParams: parseQueryParamsFromUrl(request.url),
       bodyType: normalizedBodyType,
       bodyContent: request.body ?? "",
+      preRequestScript: request.pre_request_script?.trim() || "",
+      postResponseScript: request.post_response_script?.trim() || "",
+      preScriptResult: null,
+      postScriptResult: null,
       bodyFormData:
         normalizedBodyType === "form-urlencoded"
           ? parseFormDataBody(request.body)
@@ -1525,6 +1556,8 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       ),
       timeout_ms: tab.timeoutMs,
       skip_ssl_verification: tab.skipSslVerification,
+      pre_request_script: tab.preRequestScript.trim() ? tab.preRequestScript : null,
+      post_response_script: tab.postResponseScript.trim() ? tab.postResponseScript : null,
       request_variables: tab.variables
         .filter((variable) => variable.enabled && variable.key.trim().length > 0)
         .map(toApiKeyValue),
@@ -1550,14 +1583,18 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       // null, skip environment resolution to avoid a backend error.
       const envName = activeEnvironment && workspacePath ? activeEnvironment : null;
       const wsPath = activeEnvironment && workspacePath ? workspacePath : null;
-      const response = await sendRequestWithEnvApi(
+      const result = await sendRequestWithEnvApi(
         payload,
         envName,
         wsPath,
       );
       if (requestToken === latestRequestTokenByTab.get(targetTabId)) {
         set((state) => ({
-          tabs: updateTabById(state.tabs, targetTabId, { response }),
+          tabs: updateTabById(state.tabs, targetTabId, {
+            response: result.response,
+            preScriptResult: result.pre_script_result,
+            postScriptResult: result.post_script_result,
+          }),
         }));
       }
     } catch (error) {

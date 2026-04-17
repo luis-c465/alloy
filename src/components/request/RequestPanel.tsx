@@ -9,6 +9,7 @@ import { RequestBreadcrumb } from "~/components/request/RequestBreadcrumb";
 import { SendButton } from "~/components/request/SendButton";
 import { UrlBar } from "~/components/request/UrlBar";
 import { VariablesEditor } from "~/components/request/VariablesEditor";
+import { ScriptsEditor } from "~/components/request/ScriptsEditor";
 import { FolderPropertiesPanel } from "~/components/folder/FolderPropertiesPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useActiveTab } from "~/hooks/useActiveTab";
@@ -23,6 +24,8 @@ export function RequestPanel() {
   const skipSslVerification = useActiveTabField("skipSslVerification", false);
   const timeoutMs = useActiveTabField("timeoutMs", null);
   const variables = useActiveTabField("variables", []);
+  const preRequestScript = useActiveTabField("preRequestScript", "");
+  const postResponseScript = useActiveTabField("postResponseScript", "");
   const setActiveRequestTab = useRequestStore(
     (state) => state.setActiveRequestTab,
   );
@@ -30,6 +33,7 @@ export function RequestPanel() {
   const hasActiveVariables = variables.some((variable) => (
     variable.enabled && variable.key.trim().length > 0
   ));
+  const hasActiveScripts = preRequestScript.trim() !== "" || postResponseScript.trim() !== "";
   const hasAuthManagedHeader = authType === "bearer" || authType === "basic";
 
   if (activeTab?.tabType === "folder") {
@@ -64,6 +68,15 @@ export function RequestPanel() {
             <TabsTrigger value="variables">
               Variables
               {hasActiveVariables ? (
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 rounded-full bg-primary"
+                />
+              ) : null}
+            </TabsTrigger>
+            <TabsTrigger value="scripts">
+              Scripts
+              {hasActiveScripts ? (
                 <span
                   aria-hidden="true"
                   className="size-1.5 rounded-full bg-primary"
@@ -108,6 +121,10 @@ export function RequestPanel() {
 
           <TabsContent value="variables" className="min-h-0 flex-1 overflow-auto">
             <VariablesEditor />
+          </TabsContent>
+
+          <TabsContent value="scripts" className="min-h-0 flex-1 overflow-auto">
+            <ScriptsEditor />
           </TabsContent>
 
           <TabsContent value="options" className="min-h-0 flex-1 overflow-auto">

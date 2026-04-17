@@ -1,3 +1,4 @@
+use crate::scripting::types::ScriptResult;
 use serde::{Deserialize, Serialize};
 
 #[taurpc::ipc_type]
@@ -51,6 +52,8 @@ pub struct HttpRequestData {
     pub auth_bearer: Option<String>,
     pub auth_basic_username: Option<String>,
     pub auth_basic_password: Option<String>,
+    pub pre_request_script: Option<String>,
+    pub post_response_script: Option<String>,
 }
 
 #[taurpc::ipc_type]
@@ -67,4 +70,11 @@ pub struct HttpResponseData {
     /// True when the response body exceeded the maximum buffer size and was
     /// truncated.  The `size_bytes` field still reflects the full size.
     pub is_truncated: bool,
+}
+
+#[taurpc::ipc_type]
+pub struct SendRequestResult {
+    pub response: HttpResponseData,
+    pub pre_script_result: Option<ScriptResult>,
+    pub post_script_result: Option<ScriptResult>,
 }

@@ -120,7 +120,10 @@ pub async fn read_folder_config(folder_path: &Path) -> Result<FolderConfig, AppE
     Ok(to_folder_config(parsed))
 }
 
-pub async fn write_folder_config(folder_path: &Path, config: &FolderConfig) -> Result<(), AppError> {
+pub async fn write_folder_config(
+    folder_path: &Path,
+    config: &FolderConfig,
+) -> Result<(), AppError> {
     let path = folder_config_path(folder_path);
     let toml_data = to_toml_data(config);
     let content = toml::to_string_pretty(&toml_data).map_err(|error| {
@@ -144,7 +147,10 @@ pub async fn load_folder_chain(
         ))
     })?;
     let canonical_file = std::fs::canonicalize(file_path).map_err(|error| {
-        AppError::IoError(format!("Cannot resolve file path {}: {error}", file_path.display()))
+        AppError::IoError(format!(
+            "Cannot resolve file path {}: {error}",
+            file_path.display()
+        ))
     })?;
 
     if !canonical_file.starts_with(&canonical_workspace) {

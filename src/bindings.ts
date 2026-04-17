@@ -25,9 +25,9 @@ export type HistoryListEntry = { id: number; method: string; url: string; status
 
 export type HttpFileData = { path: string; requests: HttpFileRequest[]; variables: KeyValue[] }
 
-export type HttpFileRequest = { name: string | null; method: string; url: string; headers: KeyValue[]; variables: KeyValue[]; body: string | null; body_type: string; commands: ([string, string | null])[] }
+export type HttpFileRequest = { name: string | null; method: string; url: string; headers: KeyValue[]; variables: KeyValue[]; body: string | null; body_type: string; commands: ([string, string | null])[]; pre_request_script: string | null; post_response_script: string | null }
 
-export type HttpRequestData = { method: string; url: string; headers: KeyValue[]; query_params: KeyValue[]; body: RequestBody; timeout_ms: number | null; skip_ssl_verification: boolean; request_variables: KeyValue[]; file_path: string | null; auth_type: string | null; auth_bearer: string | null; auth_basic_username: string | null; auth_basic_password: string | null }
+export type HttpRequestData = { method: string; url: string; headers: KeyValue[]; query_params: KeyValue[]; body: RequestBody; timeout_ms: number | null; skip_ssl_verification: boolean; request_variables: KeyValue[]; file_path: string | null; auth_type: string | null; auth_bearer: string | null; auth_basic_username: string | null; auth_basic_password: string | null; pre_request_script: string | null; post_response_script: string | null }
 
 export type HttpResponseData = { status: number; status_text: string; headers: KeyValue[]; body: string; is_binary: boolean; body_base64: string | null; content_type: string; size_bytes: number; time_ms: number; 
 /**
@@ -52,10 +52,16 @@ export type PickedFile = { path: string; name: string; size_bytes: number | null
 
 export type RequestBody = "None" | { Json: string } | { FormUrlEncoded: KeyValue[] } | { Multipart: MultipartField[] } | { Raw: { content: string; content_type: string } }
 
+export type ScriptConsoleEntry = { level: string; message: string; phase: string }
+
+export type ScriptResult = { success: boolean; error: string | null; console_output: ScriptConsoleEntry[]; modified_environment_variables: KeyValue[]; unset_environment_variables: string[] }
+
+export type SendRequestResult = { response: HttpResponseData; pre_script_result: ScriptResult | null; post_script_result: ScriptResult | null }
+
 const ARGS_MAP = { '':'{"save_response_to_file":["body_base64","suggested_filename"],"send_request":["request"],"send_request_with_env":["request","environment_name","workspace_path"]}', 'environment':'{"delete_environment":["workspace_path","name"],"list_environments":["workspace_path"],"read_environment":["workspace_path","name"],"resolve_url_preview":["url","workspace_path","env_name","request_variables"],"save_environment":["workspace_path","env"],"set_active_environment":["workspace_path","name"]}', 'history':'{"clear_history":[],"delete_history_entry":["id"],"get_history_entry":["id"],"list_history":["filter"]}', 'import_export':'{"export_curl":["request"],"import_curl":["curl_command"],"import_postman_collection":["json_content","workspace_path"],"pick_import_file":[]}', 'workspace':'{"create_directory":["parent_path","dir_name"],"create_http_file":["dir_path","file_name"],"delete_path":["target_path"],"ensure_workspace":["workspace_path"],"get_folder_config":["workspace_path","folder_path"],"list_files":["workspace_path"],"list_folder_configs":["workspace_path"],"pick_file":[],"pick_workspace_folder":[],"read_http_file":["file_path"],"rename_path":["from_path","to_path"],"set_folder_config":["workspace_path","folder_path","config"],"write_http_file":["file_path","data"]}' }
 export type Router = { "": {save_response_to_file: (bodyBase64: string | null, suggestedFilename: string | null) => Promise<boolean>, 
-send_request: (request: HttpRequestData) => Promise<HttpResponseData>, 
-send_request_with_env: (request: HttpRequestData, environmentName: string | null, workspacePath: string | null) => Promise<HttpResponseData>},
+send_request: (request: HttpRequestData) => Promise<SendRequestResult>, 
+send_request_with_env: (request: HttpRequestData, environmentName: string | null, workspacePath: string | null) => Promise<SendRequestResult>},
 "environment": {delete_environment: (workspacePath: string, name: string) => Promise<null>, 
 list_environments: (workspacePath: string) => Promise<EnvironmentList>, 
 read_environment: (workspacePath: string, name: string) => Promise<EnvironmentData>, 

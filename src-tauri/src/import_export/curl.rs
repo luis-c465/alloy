@@ -249,6 +249,8 @@ pub fn curl_to_request(curl_command: &str) -> Result<HttpRequestData, AppError> 
         auth_bearer: None,
         auth_basic_username: None,
         auth_basic_password: None,
+        pre_request_script: None,
+        post_response_script: None,
     })
 }
 
@@ -598,6 +600,8 @@ mod tests {
             auth_bearer: None,
             auth_basic_username: None,
             auth_basic_password: None,
+            pre_request_script: None,
+            post_response_script: None,
         }
     }
 

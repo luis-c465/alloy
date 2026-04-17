@@ -18,6 +18,8 @@ pub struct HttpFileRequest {
     pub body: Option<String>,
     pub body_type: String,
     pub commands: Vec<(String, Option<String>)>,
+    pub pre_request_script: Option<String>,
+    pub post_response_script: Option<String>,
 }
 
 #[taurpc::ipc_type]

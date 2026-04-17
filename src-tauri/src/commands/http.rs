@@ -5,7 +5,12 @@ use crate::{
     http::{
         self,
         client::ExecutedResponse,
-        types::{HttpRequestData, HttpResponseData, KeyValue, RequestBody},
+        types::{HttpRequestData, HttpResponseData, KeyValue, RequestBody, SendRequestResult},
+    },
+    scripting::{
+        run_post_response_script,
+        run_pre_request_script,
+        types::{PostResponseScriptContext, PreRequestScriptContext, ScriptResult},
     },
     workspace::{folder_config, types::FolderConfig},
 };
@@ -19,12 +24,12 @@ use tokio::sync::{Mutex, OnceCell};
 
 #[taurpc::procedures(export_to = "../src/bindings.ts")]
 pub trait Api {
-    async fn send_request(request: HttpRequestData) -> Result<HttpResponseData, AppError>;
+    async fn send_request(request: HttpRequestData) -> Result<SendRequestResult, AppError>;
     async fn send_request_with_env(
         request: HttpRequestData,
         environment_name: Option<String>,
         workspace_path: Option<String>,
-    ) -> Result<HttpResponseData, AppError>;
+    ) -> Result<SendRequestResult, AppError>;
     async fn save_response_to_file(
         body_base64: Option<String>,
         suggested_filename: Option<String>,
@@ -191,12 +196,18 @@ impl ApiImpl {
         })
     }
 
-    async fn resolve_with_environment(
+    /// Prepare the request for script execution: merge folder configs, select
+    /// the effective auth type, and gather the merged variable map. Crucially,
+    /// this does **not** perform handlebars template resolution and does not
+    /// compute the final Authorization header — both are deferred so that
+    /// pre-request scripts see raw `{{template}}` placeholders and can affect
+    /// variables before substitution happens.
+    async fn prepare_request(
         &self,
         mut request: HttpRequestData,
         environment_name: Option<String>,
         workspace_path: Option<String>,
-    ) -> Result<HttpRequestData, AppError> {
+    ) -> Result<(HttpRequestData, HashMap<String, String>), AppError> {
         let folder_chain = Self::load_folder_chain_configs(
             workspace_path.as_deref(),
             request.file_path.as_deref(),
@@ -212,9 +223,15 @@ impl ApiImpl {
         Self::merge_key_values_by_key(&mut merged_folder_headers, request_headers);
         request.headers = merged_folder_headers;
 
-        let (resolved_auth_type, resolved_auth_bearer, resolved_auth_basic_username, resolved_auth_basic_password) =
-            Self::resolve_auth_values(&request, &folder_chain);
+        let (
+            resolved_auth_type,
+            resolved_auth_bearer,
+            resolved_auth_basic_username,
+            resolved_auth_basic_password,
+        ) = Self::resolve_auth_values(&request, &folder_chain);
         request.auth_type = Some(resolved_auth_type);
+        // These may still contain {{templates}} — intentional, they are resolved
+        // later in `finalize_request` with the post-script variable map.
         request.auth_bearer = resolved_auth_bearer;
         request.auth_basic_username = resolved_auth_basic_username;
         request.auth_basic_password = resolved_auth_basic_password;
@@ -233,21 +250,31 @@ impl ApiImpl {
                     .collect();
             }
             (Some(_), None) | (None, None) => {}
-            (None, Some(_)) => {
-                return Err(AppError::RequestError(
+            (None, Some(_)) => return Err(AppError::RequestError(
                 "Both environment_name and workspace_path are required for environment resolution"
                     .to_string(),
-                ))
-            }
+            )),
         }
 
         for (_, config) in &folder_chain {
             merged_variables = Self::merge_request_variables(merged_variables, &config.variables);
         }
 
-        merged_variables = Self::merge_request_variables(merged_variables, &request.request_variables);
+        merged_variables =
+            Self::merge_request_variables(merged_variables, &request.request_variables);
 
-        let mut resolved_request = resolver::resolve_request(&self.hbs, &request, &merged_variables)?;
+        Ok((request, merged_variables))
+    }
+
+    /// Finalize the request: perform handlebars template resolution on URL,
+    /// headers, body, query params, and auth credentials, then compute and
+    /// apply the Authorization header from the resolved auth values.
+    fn finalize_request(
+        &self,
+        request: &HttpRequestData,
+        merged_variables: &HashMap<String, String>,
+    ) -> Result<HttpRequestData, AppError> {
+        let mut resolved_request = resolver::resolve_request(&self.hbs, request, merged_variables)?;
 
         let resolved_auth_value = Self::get_authorization_header_value(
             &Self::normalize_auth_type(resolved_request.auth_type.as_deref()),
@@ -258,6 +285,19 @@ impl ApiImpl {
         Self::apply_authorization_header(&mut resolved_request.headers, resolved_auth_value);
 
         Ok(resolved_request)
+    }
+
+    /// Merge two variable maps, with `overrides` winning on key conflicts. Used
+    /// to layer request-scoped (`alloy.variables`) on top of environment vars
+    /// so that the narrower scope wins during template resolution.
+    fn overlay_variables(
+        mut base: HashMap<String, String>,
+        overrides: HashMap<String, String>,
+    ) -> HashMap<String, String> {
+        for (key, value) in overrides {
+            base.insert(key, value);
+        }
+        base
     }
 
     fn app_handle(&self) -> Result<AppHandle<Wry>, AppError> {
@@ -301,7 +341,7 @@ impl ApiImpl {
 
 #[taurpc::resolvers]
 impl Api for ApiImpl {
-    async fn send_request(self, request: HttpRequestData) -> Result<HttpResponseData, AppError> {
+    async fn send_request(self, request: HttpRequestData) -> Result<SendRequestResult, AppError> {
         self.send_request_with_env(request, None, None).await
     }
 
@@ -310,13 +350,70 @@ impl Api for ApiImpl {
         request: HttpRequestData,
         environment_name: Option<String>,
         workspace_path: Option<String>,
-    ) -> Result<HttpResponseData, AppError> {
-        let resolved_request = self
-            .resolve_with_environment(request, environment_name, workspace_path)
+    ) -> Result<SendRequestResult, AppError> {
+        // Phase 1 — prepare: merge folders, pick auth type, gather variables.
+        // The request still contains raw {{template}} placeholders so the
+        // pre-request script can influence substitution via env/variable
+        // mutations.
+        let (mut prepared_request, mut merged_variables) = self
+            .prepare_request(request, environment_name, workspace_path)
             .await?;
 
+        let mut pre_script_result: Option<ScriptResult> = None;
+        let mut post_script_result: Option<ScriptResult> = None;
+
+        // Phase 2 — run pre-request script on the unresolved request, then
+        // apply any mutations and variable changes back.
+        if let Some(script) = prepared_request
+            .pre_request_script
+            .as_ref()
+            .filter(|script| !script.trim().is_empty())
+            .cloned()
+        {
+            let pre_request_context = PreRequestScriptContext {
+                method: prepared_request.method.clone(),
+                url: prepared_request.url.clone(),
+                headers: prepared_request.headers.clone(),
+                query_params: prepared_request.query_params.clone(),
+                body: request_body_to_string(&prepared_request.body),
+                body_type: request_body_type_name(&prepared_request.body),
+                environment_variables: merged_variables.clone(),
+                local_variables: HashMap::new(),
+                request_name: None,
+            };
+
+            let (script_ctx, mutations, result) = tokio::task::spawn_blocking(move || {
+                run_pre_request_script(&script, pre_request_context)
+            })
+            .await
+            .map_err(|error| {
+                AppError::RequestError(format!("Pre-request script panicked: {error}"))
+            })?;
+
+            pre_script_result = Some(result);
+
+            // Merge variable changes: environment scope first, request/local
+            // scope on top (narrowest scope wins, matching Postman semantics).
+            merged_variables = Self::overlay_variables(
+                script_ctx.environment_variables,
+                script_ctx.local_variables,
+            );
+
+            prepared_request.method = mutations.method;
+            prepared_request.url = mutations.url;
+            prepared_request.headers = mutations.headers;
+            prepared_request.query_params = mutations.query_params;
+            prepared_request.body =
+                apply_script_body_to_request(prepared_request.body, mutations.body);
+        }
+
+        // Phase 3 — finalize: resolve handlebars templates and build the
+        // Authorization header using the (possibly script-modified) variable
+        // map.
+        let resolved_request = self.finalize_request(&prepared_request, &merged_variables)?;
+
+        let request_for_send = resolved_request.clone();
         let request_for_history = resolved_request;
-        let request_for_send = request_for_history.clone();
 
         let ExecutedResponse {
             response,
@@ -325,6 +422,37 @@ impl Api for ApiImpl {
 
         *self.last_binary_response.lock().await = binary_body;
 
+        if let Some(script) = request_for_history
+            .post_response_script
+            .as_ref()
+            .filter(|script| !script.trim().is_empty())
+            .cloned()
+        {
+            let post_response_context = PostResponseScriptContext {
+                method: request_for_history.method.clone(),
+                url: request_for_history.url.clone(),
+                request_headers: request_for_history.headers.clone(),
+                response_status: response.status,
+                response_status_text: response.status_text.clone(),
+                response_headers: response.headers.clone(),
+                response_body: response.body.clone(),
+                response_time_ms: response.time_ms,
+                response_size_bytes: response.size_bytes,
+                environment_variables: merged_variables,
+                request_name: None,
+            };
+
+            let (_updated_ctx, result) = tokio::task::spawn_blocking(move || {
+                run_post_response_script(&script, post_response_context)
+            })
+            .await
+            .map_err(|error| {
+                AppError::RequestError(format!("Post-response script panicked: {error}"))
+            })?;
+
+            post_script_result = Some(result);
+        }
+
         if let Err(error) = self
             .try_insert_history(&request_for_history, &response)
             .await
@@ -332,7 +460,11 @@ impl Api for ApiImpl {
             eprintln!("Failed to insert history entry: {error}");
         }
 
-        Ok(response)
+        Ok(SendRequestResult {
+            response,
+            pre_script_result,
+            post_script_result,
+        })
     }
 
     async fn save_response_to_file(
@@ -399,6 +531,38 @@ fn request_body_to_string(body: &RequestBody) -> Option<String> {
             serde_json::to_string(values).unwrap_or_else(|_| key_values_as_pairs(values).join("&")),
         ),
         RequestBody::Multipart(fields) => Some(serde_json::to_string(fields).unwrap_or_default()),
+    }
+}
+
+fn request_body_type_name(body: &RequestBody) -> String {
+    match body {
+        RequestBody::None => "none",
+        RequestBody::Json(_) => "json",
+        RequestBody::FormUrlEncoded(_) => "form-urlencoded",
+        RequestBody::Multipart(_) => "form-data",
+        RequestBody::Raw { .. } => "raw",
+    }
+    .to_string()
+}
+
+fn apply_script_body_to_request(body: RequestBody, new_body: Option<String>) -> RequestBody {
+    match body {
+        RequestBody::Json(current) => {
+            RequestBody::Json(new_body.unwrap_or(current))
+        }
+        RequestBody::Raw {
+            content,
+            content_type,
+            ..
+        } => {
+            RequestBody::Raw {
+                content: new_body.unwrap_or(content),
+                content_type,
+            }
+        }
+        RequestBody::None => RequestBody::None,
+        RequestBody::FormUrlEncoded(values) => RequestBody::FormUrlEncoded(values),
+        RequestBody::Multipart(fields) => RequestBody::Multipart(fields),
     }
 }
 

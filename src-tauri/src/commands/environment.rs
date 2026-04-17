@@ -44,7 +44,10 @@ impl EnvironmentApiImpl {
         request_variables: Vec<KeyValue>,
         mut variables: HashMap<String, String>,
     ) -> HashMap<String, String> {
-        for variable in request_variables.into_iter().filter(|variable| variable.enabled) {
+        for variable in request_variables
+            .into_iter()
+            .filter(|variable| variable.enabled)
+        {
             let key = variable.key.trim();
             if key.is_empty() {
                 continue;

@@ -2,6 +2,7 @@ import { IconCheck, IconCopy } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "~/components/response/EmptyState";
+import { ConsoleOutput } from "~/components/response/ConsoleOutput";
 import { ResponseBody } from "~/components/response/ResponseBody";
 import { ResponseCookies } from "~/components/response/ResponseCookies";
 import { ResponseHeaders } from "~/components/response/ResponseHeaders";
@@ -17,6 +18,8 @@ export function ResponsePanel() {
   const isLoading = useActiveTabField("isLoading", false);
   const error = useActiveTabField("error", null);
   const activeResponseTab = useActiveTabField("activeResponseTab", "body");
+  const preScriptResult = useActiveTabField("preScriptResult", null);
+  const postScriptResult = useActiveTabField("postScriptResult", null);
   const setActiveResponseTab = useRequestStore(
     (state) => state.setActiveResponseTab,
   );
@@ -29,6 +32,12 @@ export function ResponsePanel() {
       .length ?? 0,
     [response?.headers],
   );
+  const consoleCount = useMemo(
+    () => (preScriptResult?.console_output.length ?? 0)
+      + (postScriptResult?.console_output.length ?? 0),
+    [postScriptResult?.console_output, preScriptResult?.console_output],
+  );
+  const hasScriptError = Boolean(preScriptResult?.error) || Boolean(postScriptResult?.error);
   const canCopyBody = Boolean(response?.body);
 
   useEffect(() => {
@@ -77,6 +86,15 @@ export function ResponsePanel() {
                 <TabsTrigger value="cookies">
                   Cookies ({cookiesCount})
                 </TabsTrigger>
+                <TabsTrigger value="console">
+                  Console ({consoleCount})
+                  {hasScriptError ? (
+                    <span
+                      aria-hidden="true"
+                      className="size-1.5 rounded-full bg-red-500"
+                    />
+                  ) : null}
+                </TabsTrigger>
               </TabsList>
 
               {activeResponseTab === "body" ? (
@@ -113,6 +131,13 @@ export function ResponsePanel() {
               className="mt-3 min-h-0 flex-1 overflow-hidden"
             >
               <ResponseCookies />
+            </TabsContent>
+
+            <TabsContent
+              value="console"
+              className="mt-3 min-h-0 flex-1 overflow-hidden"
+            >
+              <ConsoleOutput />
             </TabsContent>
           </Tabs>
         </>

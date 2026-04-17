@@ -9,9 +9,11 @@ import type {
   HistoryListEntry,
   HttpFileData,
   HttpRequestData,
-  HttpResponseData,
   ImportResult,
   KeyValue,
+  ScriptConsoleEntry,
+  ScriptResult,
+  SendRequestResult,
   PickedFile,
 } from "~/bindings";
 
@@ -68,7 +70,7 @@ const withApiError = async <T>(
 
 export const sendRequest = async (
   data: HttpRequestData,
-): Promise<HttpResponseData> => {
+): Promise<SendRequestResult> => {
   return withApiError(api.send_request(data), "Failed to send request");
 };
 
@@ -76,12 +78,14 @@ export const sendRequestWithEnv = async (
   data: HttpRequestData,
   environmentName: string | null,
   workspacePath: string | null,
-): Promise<HttpResponseData> => {
+): Promise<SendRequestResult> => {
   return withApiError(
     api.send_request_with_env(data, environmentName, workspacePath),
     "Failed to send request",
   );
 };
+
+export type { SendRequestResult, ScriptResult, ScriptConsoleEntry };
 
 export const saveResponseToFile = async (
   bodyBase64: string | null,

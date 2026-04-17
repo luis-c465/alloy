@@ -37,3 +37,6 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
 url = "2"
+boa_engine = "0.21"
+boa_gc = "0.21"
+boa_runtime = "0.21"

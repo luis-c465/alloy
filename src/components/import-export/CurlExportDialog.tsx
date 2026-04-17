@@ -83,15 +83,17 @@ const buildExportRequest = (
   environmentVariables: Map<string, string>,
 ): HttpRequestData => {
   if (tab.tabType !== "request") {
-    return {
-      method: "GET",
-      url: "",
-      headers: [],
-      query_params: [],
-      body: "None",
-      timeout_ms: null,
-      skip_ssl_verification: false,
-      request_variables: [],
+      return {
+        method: "GET",
+        url: "",
+        headers: [],
+        query_params: [],
+        body: "None",
+        pre_request_script: null,
+        post_response_script: null,
+        timeout_ms: null,
+        skip_ssl_verification: false,
+        request_variables: [],
       file_path: null,
       auth_type: null,
       auth_bearer: null,
@@ -157,13 +159,15 @@ const buildExportRequest = (
       body = "None";
   }
 
-  return {
-    method: resolveTemplateString(tab.method, variables),
-    url: resolveTemplateString(getBaseUrl(tab.url), variables),
-    headers,
-    query_params: toApiKeyValue(tab.queryParams, variables),
-    body,
-    timeout_ms: tab.timeoutMs,
+    return {
+      method: resolveTemplateString(tab.method, variables),
+      url: resolveTemplateString(getBaseUrl(tab.url), variables),
+      headers,
+      query_params: toApiKeyValue(tab.queryParams, variables),
+      body,
+      pre_request_script: tab.preRequestScript?.trim() ? tab.preRequestScript : null,
+      post_response_script: tab.postResponseScript?.trim() ? tab.postResponseScript : null,
+      timeout_ms: tab.timeoutMs,
     skip_ssl_verification: tab.skipSslVerification,
     request_variables: [],
     file_path: tab.filePath,

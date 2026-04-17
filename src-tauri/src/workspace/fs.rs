@@ -23,10 +23,7 @@ pub fn assert_within_directory(root: &Path, target: &Path) -> Result<PathBuf, Ap
     })?;
 
     let canonical_target = std::fs::canonicalize(target).map_err(|error| {
-        AppError::IoError(format!(
-            "Cannot resolve path {}: {error}",
-            target.display()
-        ))
+        AppError::IoError(format!("Cannot resolve path {}: {error}", target.display()))
     })?;
 
     if !canonical_target.starts_with(&canonical_root) {
@@ -187,12 +184,14 @@ pub async fn read_file_content(path: &Path) -> Result<String, AppError> {
 /// mid-write from corrupting the target file.
 pub async fn atomic_write(path: &Path, content: &[u8]) -> Result<(), AppError> {
     let tmp_path = path.with_extension("tmp");
-    tokio::fs::write(&tmp_path, content).await.map_err(|error| {
-        AppError::IoError(format!(
-            "Failed to write temporary file {}: {error}",
-            tmp_path.display()
-        ))
-    })?;
+    tokio::fs::write(&tmp_path, content)
+        .await
+        .map_err(|error| {
+            AppError::IoError(format!(
+                "Failed to write temporary file {}: {error}",
+                tmp_path.display()
+            ))
+        })?;
 
     if let Err(error) = tokio::fs::rename(&tmp_path, path).await {
         // Best-effort cleanup of the temp file.

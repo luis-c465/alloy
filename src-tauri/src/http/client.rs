@@ -249,6 +249,8 @@ pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedRespons
         auth_bearer: _,
         auth_basic_username: _,
         auth_basic_password: _,
+        pre_request_script: _,
+        post_response_script: _,
     } = request;
 
     let mut url = parse_url(&raw_url)?;
@@ -396,8 +398,8 @@ pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedRespons
     let size_bytes = content_length.unwrap_or(total_bytes);
     let is_binary = should_treat_as_binary(&content_type, &buf);
 
-    let body_base64 = (is_binary && buf.len() <= MAX_BINARY_BASE64_BYTES)
-        .then(|| BASE64_STANDARD.encode(&buf));
+    let body_base64 =
+        (is_binary && buf.len() <= MAX_BINARY_BASE64_BYTES).then(|| BASE64_STANDARD.encode(&buf));
 
     let body = if is_binary {
         String::new()
@@ -570,6 +572,8 @@ mod tests {
             auth_bearer: None,
             auth_basic_username: None,
             auth_basic_password: None,
+            pre_request_script: None,
+            post_response_script: None,
         };
 
         let response = execute_request(request)
@@ -618,6 +622,8 @@ mod tests {
             auth_bearer: None,
             auth_basic_username: None,
             auth_basic_password: None,
+            pre_request_script: None,
+            post_response_script: None,
         };
 
         let response = execute_request(request)
@@ -672,6 +678,8 @@ mod tests {
             auth_bearer: None,
             auth_basic_username: None,
             auth_basic_password: None,
+            pre_request_script: None,
+            post_response_script: None,
         };
 
         let error = match execute_request(request).await {
@@ -701,6 +709,8 @@ mod tests {
             auth_bearer: None,
             auth_basic_username: None,
             auth_basic_password: None,
+            pre_request_script: None,
+            post_response_script: None,
         };
 
         let response = execute_request(request)
@@ -752,6 +762,8 @@ mod tests {
             auth_bearer: None,
             auth_basic_username: None,
             auth_basic_password: None,
+            pre_request_script: None,
+            post_response_script: None,
         };
 
         let response = execute_request(request)

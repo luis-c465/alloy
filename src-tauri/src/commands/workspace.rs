@@ -7,8 +7,7 @@ use tokio::sync::OnceCell;
 use crate::{
     error::AppError,
     workspace::{
-        folder_config,
-        fs,
+        folder_config, fs,
         parser::parse_http_file,
         serializer::serialize_http_file,
         types::{FileEntry, FolderConfig, FolderConfigEntry, HttpFileData},
@@ -296,7 +295,10 @@ fn list_directories_recursive(path: &Path, depth: usize) -> Result<Vec<PathBuf>,
 
     let mut results = vec![path.to_path_buf()];
     let read_dir = std::fs::read_dir(path).map_err(|error| {
-        AppError::IoError(format!("Failed to list directory {}: {error}", path.display()))
+        AppError::IoError(format!(
+            "Failed to list directory {}: {error}",
+            path.display()
+        ))
     })?;
 
     for entry in read_dir {

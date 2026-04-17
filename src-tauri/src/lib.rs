@@ -4,6 +4,7 @@ mod error;
 mod history;
 mod http;
 mod import_export;
+mod scripting;
 mod workspace;
 
 use commands::{

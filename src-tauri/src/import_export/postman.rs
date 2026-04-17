@@ -347,6 +347,8 @@ fn postman_item_to_http_request(
         body: normalized.body,
         body_type: normalized.body_type,
         commands: Vec::new(),
+        pre_request_script: None,
+        post_response_script: None,
     })
 }
 

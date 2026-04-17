@@ -282,9 +282,7 @@ mod tests {
         assert!(loaded
             .variables
             .iter()
-            .any(|kv| kv.key == "base_url"
-                && kv.value == "http://localhost:3000"
-                && kv.enabled));
+            .any(|kv| kv.key == "base_url" && kv.value == "http://localhost:3000" && kv.enabled));
         assert!(loaded
             .variables
             .iter()
@@ -305,8 +303,7 @@ mod tests {
 
     #[tokio::test]
     async fn environment_toml_preserves_disabled_variables() {
-        let workspace =
-            std::env::temp_dir().join(format!("alloy-env-disabled-{}", Uuid::new_v4()));
+        let workspace = std::env::temp_dir().join(format!("alloy-env-disabled-{}", Uuid::new_v4()));
         tokio::fs::create_dir_all(&workspace).await.unwrap();
 
         let env = EnvironmentData {
@@ -351,8 +348,7 @@ mod tests {
 
     #[tokio::test]
     async fn environment_toml_reads_legacy_plain_string_format() {
-        let workspace =
-            std::env::temp_dir().join(format!("alloy-env-legacy-{}", Uuid::new_v4()));
+        let workspace = std::env::temp_dir().join(format!("alloy-env-legacy-{}", Uuid::new_v4()));
         let env_dir = workspace.join(".alloy").join("environments");
         tokio::fs::create_dir_all(&env_dir).await.unwrap();
 

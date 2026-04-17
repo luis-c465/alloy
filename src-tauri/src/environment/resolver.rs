@@ -113,6 +113,8 @@ pub fn resolve_request(
             .as_ref()
             .map(|value| resolve_template(hbs, value, variables))
             .transpose()?,
+        pre_request_script: request.pre_request_script.clone(),
+        post_response_script: request.post_response_script.clone(),
     })
 }
 
@@ -217,6 +219,8 @@ mod tests {
             auth_bearer: None,
             auth_basic_username: None,
             auth_basic_password: None,
+            pre_request_script: None,
+            post_response_script: None,
         };
 
         let resolved = resolve_request(&hbs, &request, &variables).unwrap();
@@ -257,6 +261,8 @@ mod tests {
             auth_bearer: None,
             auth_basic_username: None,
             auth_basic_password: None,
+            pre_request_script: None,
+            post_response_script: None,
         };
 
         let resolved = resolve_request(&hbs, &request, &variables).unwrap();
@@ -303,6 +309,8 @@ mod tests {
             auth_bearer: None,
             auth_basic_username: None,
             auth_basic_password: None,
+            pre_request_script: None,
+            post_response_script: None,
         };
 
         let resolved = resolve_request(&hbs, &request, &variables).unwrap();

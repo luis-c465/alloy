@@ -7,9 +7,27 @@ use crate::{
 };
 
 const REQUEST_VARIABLE_COMMAND: &str = "var";
+const PRE_REQUEST_START_TAG: &str = "# @pre-request";
+const PRE_REQUEST_END_TAG: &str = "# @end-pre-request";
+const POST_RESPONSE_START_TAG: &str = "# @post-response";
+const POST_RESPONSE_END_TAG: &str = "# @end-post-response";
+
+#[derive(Clone, Default)]
+struct ScriptBlocks {
+    pre_request_script: Option<String>,
+    post_response_script: Option<String>,
+}
+
+#[derive(Copy, Clone)]
+enum ScriptBlockType {
+    PreRequest,
+    PostResponse,
+}
 
 pub fn parse_http_file(content: &str, file_path: &str) -> Result<HttpFileData, AppError> {
-    let rest_format = RestFormat::parse(content, RestFlavor::Generic)
+    let (script_blocks_by_block, cleaned_content) =
+        extract_request_scripts_and_clean_content(content);
+    let rest_format = RestFormat::parse(&cleaned_content, RestFlavor::Generic)
         .map_err(|error| AppError::ParseError(format!("Failed to parse {file_path}: {error}")))?;
     let request_variables_by_block = extract_request_variables_by_block(content);
 
@@ -65,6 +83,10 @@ pub fn parse_http_file(content: &str, file_path: &str) -> Result<HttpFileData, A
                 .get(request_index)
                 .cloned()
                 .unwrap_or_default();
+            let script_blocks = script_blocks_by_block
+                .get(request_index)
+                .cloned()
+                .unwrap_or_default();
             let variables = if variables_from_block.is_empty() {
                 command_variables
             } else {
@@ -80,6 +102,8 @@ pub fn parse_http_file(content: &str, file_path: &str) -> Result<HttpFileData, A
                 body,
                 body_type,
                 commands,
+                pre_request_script: script_blocks.pre_request_script,
+                post_response_script: script_blocks.post_response_script,
             }
         })
         .collect();
@@ -181,6 +205,141 @@ fn build_request_variable(key: &str, value: &str) -> Option<KeyValue> {
     })
 }
 
+fn extract_request_scripts_and_clean_content(content: &str) -> (Vec<ScriptBlocks>, String) {
+    let mut script_blocks = Vec::new();
+    let mut current_block: Option<usize> = None;
+    let mut active_script: Option<ScriptBlockType> = None;
+    let mut active_script_lines: Vec<String> = Vec::new();
+    let mut cleaned_lines = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("###") {
+            finalize_active_script(
+                &mut script_blocks,
+                &mut active_script,
+                &mut active_script_lines,
+                current_block,
+            );
+            script_blocks.push(ScriptBlocks::default());
+            current_block = Some(script_blocks.len() - 1);
+            cleaned_lines.push(line.to_string());
+            continue;
+        }
+
+        if current_block.is_none() {
+            cleaned_lines.push(line.to_string());
+            continue;
+        }
+
+        if let Some(script_type) = active_script {
+            if is_script_end_tag(trimmed, script_type) {
+                finalize_active_script(
+                    &mut script_blocks,
+                    &mut active_script,
+                    &mut active_script_lines,
+                    current_block,
+                );
+                continue;
+            }
+
+            if !trimmed.starts_with('#') {
+                finalize_active_script(
+                    &mut script_blocks,
+                    &mut active_script,
+                    &mut active_script_lines,
+                    current_block,
+                );
+                cleaned_lines.push(line.to_string());
+                continue;
+            }
+
+            active_script_lines.push(strip_script_comment_prefix(line));
+            continue;
+        }
+
+        if let Some(script_type) = parse_script_start_tag(trimmed) {
+            active_script = Some(script_type);
+            active_script_lines.clear();
+            continue;
+        }
+
+        cleaned_lines.push(line.to_string());
+    }
+
+    finalize_active_script(
+        &mut script_blocks,
+        &mut active_script,
+        &mut active_script_lines,
+        current_block,
+    );
+
+    let cleaned_content = cleaned_lines.join("\n");
+    (script_blocks, cleaned_content)
+}
+
+fn finalize_active_script(
+    script_blocks: &mut Vec<ScriptBlocks>,
+    active_script: &mut Option<ScriptBlockType>,
+    active_script_lines: &mut Vec<String>,
+    current_block: Option<usize>,
+) {
+    let Some(block_index) = current_block else {
+        *active_script = None;
+        active_script_lines.clear();
+        return;
+    };
+
+    let Some(script_type) = active_script.take() else {
+        return;
+    };
+
+    let script = if active_script_lines.is_empty() {
+        Some(String::new())
+    } else {
+        Some(active_script_lines.join("\n"))
+    };
+
+    match script_type {
+        ScriptBlockType::PreRequest => {
+            script_blocks[block_index].pre_request_script = script;
+        }
+        ScriptBlockType::PostResponse => {
+            script_blocks[block_index].post_response_script = script;
+        }
+    }
+
+    active_script_lines.clear();
+}
+
+fn parse_script_start_tag(trimmed_line: &str) -> Option<ScriptBlockType> {
+    match trimmed_line {
+        PRE_REQUEST_START_TAG => Some(ScriptBlockType::PreRequest),
+        POST_RESPONSE_START_TAG => Some(ScriptBlockType::PostResponse),
+        _ => None,
+    }
+}
+
+fn is_script_end_tag(trimmed_line: &str, active: ScriptBlockType) -> bool {
+    match active {
+        ScriptBlockType::PreRequest => trimmed_line == PRE_REQUEST_END_TAG,
+        ScriptBlockType::PostResponse => trimmed_line == POST_RESPONSE_END_TAG,
+    }
+}
+
+fn strip_script_comment_prefix(line: &str) -> String {
+    if let Some(content) = line.strip_prefix("# ") {
+        content.to_string()
+    } else if line.trim() == "#" {
+        String::new()
+    } else if line.starts_with('#') {
+        line[1..].to_string()
+    } else {
+        String::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,7 +387,99 @@ mod tests {
         let request = &parsed.requests[0];
         assert_eq!(request.name.as_deref(), Some("GetUsers"));
         assert!(request.commands.iter().any(|(key, _)| key == "no-log"));
+        assert!(!request
+            .commands
+            .iter()
+            .any(|(key, _)| key == "pre-request" || key == "post-response"));
         assert!(request.variables.is_empty());
+    }
+
+    #[test]
+    fn parse_pre_request_script() {
+        let content =
+            "###\n# @pre-request\n# alloy.setVar(\"a\", 1);\n# @end-pre-request\nGET https://example.com/users HTTP/1.1\n";
+
+        let parsed = parse_http_file(content, "scripts.http").unwrap();
+
+        assert_eq!(parsed.requests.len(), 1);
+        let request = &parsed.requests[0];
+        assert_eq!(
+            request.pre_request_script.as_deref(),
+            Some("alloy.setVar(\"a\", 1);")
+        );
+        assert!(request.post_response_script.is_none());
+    }
+
+    #[test]
+    fn parse_pre_and_post_request_scripts() {
+        let content = "###\n# @pre-request\n# const start = Date.now();\n# @end-pre-request\n# @post-response\n# console.log('done');\n# @end-post-response\nPOST https://example.com/users HTTP/1.1\n";
+
+        let parsed = parse_http_file(content, "scripts.http").unwrap();
+
+        assert_eq!(parsed.requests.len(), 1);
+        let request = &parsed.requests[0];
+        assert_eq!(
+            request.pre_request_script.as_deref(),
+            Some("const start = Date.now();")
+        );
+        assert_eq!(
+            request.post_response_script.as_deref(),
+            Some("console.log('done');")
+        );
+    }
+
+    #[test]
+    fn parse_script_blocks_with_blank_comment_lines_preserved() {
+        let content =
+            "###\n# @pre-request\n#\n# const start = Date.now();\n#\n# @end-pre-request\nGET https://example.com/empty HTTP/1.1\n";
+
+        let parsed = parse_http_file(content, "scripts.http").unwrap();
+
+        assert_eq!(
+            parsed.requests[0].pre_request_script.as_deref(),
+            Some("\nconst start = Date.now();\n")
+        );
+    }
+
+    #[test]
+    fn parse_no_script_blocks_has_none_fields() {
+        let content = "###\nGET https://example.com/users HTTP/1.1\n";
+
+        let parsed = parse_http_file(content, "basic.http").unwrap();
+
+        let request = &parsed.requests[0];
+        assert!(request.pre_request_script.is_none());
+        assert!(request.post_response_script.is_none());
+    }
+
+    #[test]
+    fn parse_script_round_trip_preserves_block_content() {
+        let content = "###\n# @pre-request\n# const timestamp = new Date().toISOString();\n# @end-pre-request\n# @post-response\n# const id = alloy.response.json().id;\n# @end-post-response\nGET https://example.com/users HTTP/1.1\n";
+
+        let parsed_data = parse_http_file(content, "roundtrip.http").unwrap();
+        assert_eq!(
+            parsed_data.requests[0].pre_request_script,
+            Some("const timestamp = new Date().toISOString();".to_string())
+        );
+        assert_eq!(
+            parsed_data.requests[0].post_response_script,
+            Some("const id = alloy.response.json().id;".to_string())
+        );
+
+        let reparsed = parse_http_file(
+            &crate::workspace::serializer::serialize_http_file(&parsed_data),
+            "roundtrip.http",
+        )
+        .unwrap();
+
+        assert_eq!(
+            reparsed.requests[0].pre_request_script,
+            Some("const timestamp = new Date().toISOString();".to_string())
+        );
+        assert_eq!(
+            reparsed.requests[0].post_response_script,
+            Some("const id = alloy.response.json().id;".to_string())
+        );
     }
 
     #[test]
