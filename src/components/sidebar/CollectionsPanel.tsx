@@ -3,7 +3,8 @@ import {
   IconFolderPlus,
   IconRefresh,
 } from "@tabler/icons-react";
-import { Fragment, useMemo, useState } from "react";
+import {
+  Fragment, useEffect, useMemo, useState } from "react";
 
 import type { FileEntry } from "~/bindings";
 import { OpenWorkspaceDialog } from "~/components/workspace/OpenWorkspaceDialog";
@@ -98,6 +99,9 @@ export function CollectionsPanel() {
     (state) => state.tabs.find((tab) => tab.id === state.activeTabId)?.filePath ?? null,
   );
 
+  const pendingSidebarTrigger = useWorkspaceStore((state) => state.pendingSidebarTrigger);
+  const clearSidebarTrigger = useWorkspaceStore((state) => state.clearSidebarTrigger);
+
   const [pendingCreation, setPendingCreation] = useState<PendingCreation | null>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -124,8 +128,7 @@ export function CollectionsPanel() {
     return selectedEntry.is_dir ? selectedEntry.path : getParentPath(selectedEntry.path);
   }, [selectedEntry, workspacePath]);
 
-  const startCreate = (mode: { type: "file" | "folder"; parentPath: string }) => {
-    setError(null);
+  const startCreate = (mode: { type: "file" | "folder"; parentPath: string }) => {    setError(null);
     setRenamingPath(null);
     setRenameDraft("");
 
@@ -304,6 +307,48 @@ export function CollectionsPanel() {
   const handleToggleDirectory = (path: string, expanded: boolean) => {
     setPathExpanded(path, expanded);
   };
+
+  useEffect(() => {
+    if (!pendingSidebarTrigger) {
+      return;
+    }
+
+    clearSidebarTrigger();
+
+    if (pendingSidebarTrigger.type === "new-file") {
+      setError(null);
+      setRenamingPath(null);
+      setRenameDraft("");
+      setPathExpanded(pendingSidebarTrigger.parentPath, true);
+      setPendingCreation({
+        type: "file",
+        parentPath: pendingSidebarTrigger.parentPath,
+        name: "new-request.http",
+      });
+    } else if (pendingSidebarTrigger.type === "new-folder") {
+      setError(null);
+      setRenamingPath(null);
+      setRenameDraft("");
+      setPathExpanded(pendingSidebarTrigger.parentPath, true);
+      setPendingCreation({
+        type: "folder",
+        parentPath: pendingSidebarTrigger.parentPath,
+        name: "new-folder",
+      });
+    } else if (pendingSidebarTrigger.type === "folder-properties") {
+      const entry = findEntryByPath(fileTree, pendingSidebarTrigger.folderPath);
+      if (entry && workspacePath && !isBusy) {
+        setError(null);
+        setIsBusy(true);
+        getFolderConfig(workspacePath, entry.path)
+          .then((config) => openFolderTab(entry.path, config))
+          .catch((openError: unknown) => {
+            setError(openError instanceof Error ? openError.message : "Failed to open folder properties");
+          })
+          .finally(() => setIsBusy(false));
+      }
+    }
+  }, [pendingSidebarTrigger, clearSidebarTrigger, fileTree, workspacePath, isBusy, setPathExpanded, openFolderTab]);
 
   const handleSubmitRename = async () => {
     if (!workspacePath || !renamingPath || isBusy) {

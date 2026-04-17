@@ -7,6 +7,11 @@ import { SIDEBAR_TABS } from "~/lib/constants";
 
 type SidebarTab = (typeof SIDEBAR_TABS)[number];
 
+export type SidebarTrigger =
+  | { type: "new-file"; parentPath: string }
+  | { type: "new-folder"; parentPath: string }
+  | { type: "folder-properties"; folderPath: string };
+
 interface WorkspaceStore {
   workspacePath: string | null;
   workspaceName: string | null;
@@ -18,6 +23,8 @@ interface WorkspaceStore {
   selectedPath: string | null;
   expandedState: Record<string, boolean>;
   folderConfigs: Record<string, FolderConfig>;
+  /** Pending trigger from outside the sidebar (e.g. breadcrumb context menu). Consumed and cleared by CollectionsPanel. */
+  pendingSidebarTrigger: SidebarTrigger | null;
   initWorkspace: () => Promise<void>;
   setWorkspace: (path: string | null) => Promise<void>;
   setSidebarVisible: (visible: boolean) => void;
@@ -33,6 +40,8 @@ interface WorkspaceStore {
   setFolderConfigCache: (folderPath: string, config: FolderConfig) => void;
   getFolderConfig: (folderPath: string) => FolderConfig | null;
   getFolderConfigChain: (filePath: string | null) => Array<{ folderPath: string; config: FolderConfig }>;
+  dispatchSidebarTrigger: (trigger: SidebarTrigger) => void;
+  clearSidebarTrigger: () => void;
 }
 
 const LAST_WORKSPACE_KEY = "alloy-last-workspace";
@@ -135,6 +144,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
   selectedPath: null,
   expandedState: {},
   folderConfigs: {},
+  pendingSidebarTrigger: null,
   initWorkspace: async () => {
     const path = readStoredWorkspacePath();
     if (!path) {
@@ -290,4 +300,6 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
       .filter((folderPath) => Boolean(cache[folderPath]))
       .map((folderPath) => ({ folderPath, config: cache[folderPath]! }));
   },
+  dispatchSidebarTrigger: (trigger) => set({ pendingSidebarTrigger: trigger }),
+  clearSidebarTrigger: () => set({ pendingSidebarTrigger: null }),
 }));

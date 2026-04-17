@@ -1,5 +1,5 @@
 import { IconFile, IconFolder } from "@tabler/icons-react";
-import { useMemo } from "react";
+import { useMemo, useState, type MouseEvent } from "react";
 
 import { useActiveTab } from "~/hooks/useActiveTab";
 import { useActiveTabField } from "~/hooks/useActiveTab";
@@ -13,6 +13,7 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "~/components/ui/breadcrumb";
+import { BreadcrumbFolderContextMenu } from "./BreadcrumbFolderContextMenu";
 
 type Segment = {
   label: string;
@@ -70,6 +71,11 @@ export function RequestBreadcrumb() {
   const folderPath = useActiveTabField("folderPath", null);
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const revealPath = useWorkspaceStore((state) => state.revealPath);
+  const dispatchSidebarTrigger = useWorkspaceStore((state) => state.dispatchSidebarTrigger);
+
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [contextMenuPath, setContextMenuPath] = useState<string | null>(null);
 
   const segments = useMemo(() => {
     const targetPath = activeTab?.tabType === "folder" ? folderPath : filePath;
@@ -87,6 +93,14 @@ export function RequestBreadcrumb() {
 
     return derived;
   }, [activeTab?.tabType, filePath, folderPath, workspacePath]);
+
+  const handleFolderContextMenu = (event: MouseEvent<HTMLButtonElement>, segmentPath: string) => {
+    event.preventDefault();
+    revealPath(segmentPath);
+    setContextMenuPath(segmentPath);
+    setContextMenuPosition({ x: event.clientX, y: event.clientY });
+    setContextMenuOpen(true);
+  };
 
   if (segments.length === 0) {
     return null;
@@ -108,6 +122,11 @@ export function RequestBreadcrumb() {
                   onClick={() => {
                     revealPath(segment.path);
                   }}
+                  onContextMenu={
+                    !segment.isFile
+                      ? (e) => handleFolderContextMenu(e, segment.path)
+                      : undefined
+                  }
                 >
                   {segment.isFile ? (
                     <IconFile className="size-3 shrink-0" />
@@ -122,6 +141,27 @@ export function RequestBreadcrumb() {
           ))}
         </BreadcrumbList>
       </Breadcrumb>
+
+      <BreadcrumbFolderContextMenu
+        open={contextMenuOpen}
+        position={contextMenuPosition}
+        onOpenChange={setContextMenuOpen}
+        onFolderProperties={() => {
+          if (contextMenuPath) {
+            dispatchSidebarTrigger({ type: "folder-properties", folderPath: contextMenuPath });
+          }
+        }}
+        onNewFile={() => {
+          if (contextMenuPath) {
+            dispatchSidebarTrigger({ type: "new-file", parentPath: contextMenuPath });
+          }
+        }}
+        onNewFolder={() => {
+          if (contextMenuPath) {
+            dispatchSidebarTrigger({ type: "new-folder", parentPath: contextMenuPath });
+          }
+        }}
+      />
     </div>
   );
 }
