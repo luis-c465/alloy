@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-label="Alloy response viewer placeholder">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#1f2937"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="700" fill="url(#bg2)"/>
+  <rect x="48" y="48" width="1104" height="604" rx="12" fill="#0b1220" stroke="#334155"/>
+  <rect x="80" y="90" width="150" height="34" rx="8" fill="#166534"/>
+  <rect x="244" y="90" width="120" height="34" rx="8" fill="#111827" stroke="#334155"/>
+  <rect x="378" y="90" width="120" height="34" rx="8" fill="#111827" stroke="#334155"/>
+  <rect x="80" y="144" width="1040" height="476" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="600" y="340" font-family="Arial, sans-serif" font-size="40" text-anchor="middle" fill="#e2e8f0">RESPONSE VIEWER</text>
+  <text x="600" y="390" font-family="Arial, sans-serif" font-size="22" text-anchor="middle" fill="#94a3b8">Replace with real Alloy screenshot</text>
+</svg>
