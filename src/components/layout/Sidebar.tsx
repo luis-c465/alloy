@@ -13,6 +13,10 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <img src="/logo.svg" alt="Alloy" className="size-5 shrink-0" />
+        <span className="text-sm font-semibold tracking-tight">Alloy</span>
+      </div>
       <div className="border-b border-border p-2">
         <Tabs
           value={activeTab}
