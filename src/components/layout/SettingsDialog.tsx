@@ -30,6 +30,7 @@ import {
 import { CATEGORY_ORDER, formatForDisplay, type ShortcutCategory } from "~/lib/shortcuts";
 import { type ThemeMode, useThemeStore } from "~/stores/theme-store";
 import { type DirtyTabEvictionMode, type NoClosableTabBehavior, useRequestStore } from "~/stores/request-store";
+import { EDITOR_THEMES } from "~/lib/codemirror/editor-themes";
 
 const TAB_LIMIT_MIN = 1;
 const TAB_LIMIT_MAX = 100;
@@ -65,6 +66,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const theme = useThemeStore((state) => state.theme);
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const setTheme = useThemeStore((state) => state.setTheme);
+  const editorThemeLight = useThemeStore((state) => state.editorThemeLight);
+  const editorThemeDark = useThemeStore((state) => state.editorThemeDark);
+  const setEditorThemeLight = useThemeStore((state) => state.setEditorThemeLight);
+  const setEditorThemeDark = useThemeStore((state) => state.setEditorThemeDark);
   const { hotkeys } = useHotkeyRegistrations();
   const tabLimitSettings = useRequestStore((state) => state.tabLimitSettings);
   const setTabLimitSettings = useRequestStore((state) => state.setTabLimitSettings);
@@ -85,6 +90,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       new Map(),
     ),
     [hotkeys],
+  );
+
+  const editorThemeEntries = Object.entries(EDITOR_THEMES).sort((a, b) =>
+    a[1].label.localeCompare(b[1].label),
   );
 
   return (
@@ -240,6 +249,49 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 <Badge variant="outline">
                   Active: {theme === "system" ? `System (${getThemeLabel(resolvedTheme)})` : getThemeLabel(theme)}
                 </Badge>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-border bg-muted/20 p-3">
+              <div className="text-sm font-medium">Editor theme</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Choose the syntax highlighting theme for all code editors.
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-medium text-foreground mb-1">Light mode</p>
+                  <Select
+                    value={editorThemeLight}
+                    onValueChange={setEditorThemeLight}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {editorThemeEntries.map(([key, { label }]) => (
+                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <p className="text-xs font-medium text-foreground mb-1">Dark mode</p>
+                  <Select
+                    value={editorThemeDark}
+                    onValueChange={setEditorThemeDark}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {editorThemeEntries.map(([key, { label }]) => (
+                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </TabsContent>

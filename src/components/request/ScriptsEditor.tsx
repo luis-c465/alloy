@@ -1,4 +1,3 @@
-import { oneDark } from "@codemirror/theme-one-dark";
 import { javascript } from "@codemirror/lang-javascript";
 import { type Extension } from "@codemirror/state";
 import CodeMirror from "@uiw/react-codemirror";
@@ -9,6 +8,7 @@ import { useActiveTabField } from "~/hooks/useActiveTab";
 import { useRequestStore } from "~/stores/request-store";
 import { useThemeStore } from "~/stores/theme-store";
 import { buildScriptExtensions } from "~/lib/codemirror/script-extensions";
+import { getEditorThemeExtension } from "~/lib/codemirror/editor-themes";
 
 type ScriptTab = "pre-request" | "post-response";
 
@@ -21,6 +21,12 @@ export function ScriptsEditor() {
   const setPreRequestScript = useRequestStore((state) => state.setPreRequestScript);
   const setPostResponseScript = useRequestStore((state) => state.setPostResponseScript);
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
+  const editorThemeLight = useThemeStore((state) => state.editorThemeLight);
+  const editorThemeDark = useThemeStore((state) => state.editorThemeDark);
+
+  const themeExtension = resolvedTheme === "dark"
+    ? getEditorThemeExtension(editorThemeDark)
+    : getEditorThemeExtension(editorThemeLight);
 
   const [activeScriptTab, setActiveScriptTab] = useState<ScriptTab>("pre-request");
 
@@ -64,13 +70,13 @@ export function ScriptsEditor() {
           <CodeMirror
             value={preRequestScript}
             onChange={setPreRequestScript}
-            extensions={preExtensions}
+            extensions={[themeExtension, ...preExtensions]}
             minHeight="200px"
             basicSetup={{
               lineNumbers: true,
               foldGutter: true,
             }}
-            theme={resolvedTheme === "dark" ? oneDark : "light"}
+            theme="none"
             className="h-full"
           />
         </TabsContent>
@@ -82,13 +88,13 @@ export function ScriptsEditor() {
           <CodeMirror
             value={postResponseScript}
             onChange={setPostResponseScript}
-            extensions={postExtensions}
+            extensions={[themeExtension, ...postExtensions]}
             minHeight="200px"
             basicSetup={{
               lineNumbers: true,
               foldGutter: true,
             }}
-            theme={resolvedTheme === "dark" ? oneDark : "light"}
+            theme="none"
             className="h-full"
           />
         </TabsContent>
