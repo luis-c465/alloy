@@ -29,6 +29,7 @@ export type FileTreeContextValue = {
   onSubmitRename: () => void;
   onCancelRename: () => void;
   onDelete: (entry: FileEntry) => void;
+  onEditFolderProperties: (entry: FileEntry) => void;
 };
 
 type FileTreeContextProviderProps = FileTreeContextValue & {
@@ -59,6 +60,7 @@ export function FileTreeContextProvider({
   onSubmitRename,
   onCancelRename,
   onDelete,
+  onEditFolderProperties,
 }: FileTreeContextProviderProps) {
   return (
     <FileTreeContext.Provider
@@ -83,6 +85,7 @@ export function FileTreeContextProvider({
         onSubmitRename,
         onCancelRename,
         onDelete,
+        onEditFolderProperties,
       }}
     >
       {children}

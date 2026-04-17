@@ -56,6 +56,7 @@ export const FileTreeNode = memo(function FileTreeNode({
     onSubmitRename,
     onCancelRename,
     onDelete,
+    onEditFolderProperties,
   } = useFileTreeContext();
 
   const isDirectory = entry.is_dir;
@@ -222,6 +223,11 @@ export const FileTreeNode = memo(function FileTreeNode({
           }}
           onDelete={() => {
             onDelete(entry);
+          }}
+          onEditFolderProperties={() => {
+            if (isDirectory) {
+              onEditFolderProperties(entry);
+            }
           }}
         />
       </div>

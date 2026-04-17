@@ -399,6 +399,7 @@ export default function App() {
               ) : (
                 tabLimitPromptState?.candidates.map((tab) => {
                   const isSelected = tabLimitPromptState?.selectedTabId === tab.id;
+                  const methodLabel = tab.tabType === "folder" ? "FOLDER" : tab.method;
                   return (
                     <button
                       key={tab.id}
@@ -422,7 +423,7 @@ export default function App() {
                       }`}
                     >
                       <span className="shrink-0 text-[10px] font-semibold uppercase text-muted-foreground">
-                        {tab.method}
+                        {methodLabel}
                       </span>
                       <span className="min-w-0 flex-1 truncate">
                         {tab.name || tab.url || "New Request"}

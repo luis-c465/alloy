@@ -180,8 +180,10 @@ const mapHistoryEntryToTab = (entry: HistoryEntry): Partial<Tab> => {
   const bodyType = inferBodyType(headers, entry.request_body);
 
   return {
+    tabType: "request",
     name: getTabName(entry),
     filePath: null,
+    folderPath: null,
     isDirty: false,
     method: entry.method || "GET",
     url: entry.url,
@@ -196,11 +198,22 @@ const mapHistoryEntryToTab = (entry: HistoryEntry): Partial<Tab> => {
     rawContentType:
       headers.find((header) => header.key.toLowerCase() === "content-type")?.value
       || (bodyType === "json" ? "application/json" : "text/plain"),
+    authType: "inherit",
+    authBearer: "",
+    authBasicUsername: "",
+    authBasicPassword: "",
     response: toResponse(entry),
     isLoading: false,
     error: null,
     activeRequestTab: "params",
     activeResponseTab: "body",
+    activeFolderTab: "headers",
+    folderHeaders: [{ key: "", value: "", enabled: true, id: crypto.randomUUID() }],
+    folderVariables: [{ key: "", value: "", enabled: true, id: crypto.randomUUID() }],
+    folderAuthType: "none",
+    folderAuthBearer: "",
+    folderAuthBasicUsername: "",
+    folderAuthBasicPassword: "",
   };
 };
 

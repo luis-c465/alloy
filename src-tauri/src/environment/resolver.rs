@@ -96,6 +96,23 @@ pub fn resolve_request(
         timeout_ms: request.timeout_ms,
         skip_ssl_verification: request.skip_ssl_verification,
         request_variables: request.request_variables.clone(),
+        file_path: request.file_path.clone(),
+        auth_type: request.auth_type.clone(),
+        auth_bearer: request
+            .auth_bearer
+            .as_ref()
+            .map(|value| resolve_template(hbs, value, variables))
+            .transpose()?,
+        auth_basic_username: request
+            .auth_basic_username
+            .as_ref()
+            .map(|value| resolve_template(hbs, value, variables))
+            .transpose()?,
+        auth_basic_password: request
+            .auth_basic_password
+            .as_ref()
+            .map(|value| resolve_template(hbs, value, variables))
+            .transpose()?,
     })
 }
 
@@ -195,6 +212,11 @@ mod tests {
             timeout_ms: Some(1_500),
             skip_ssl_verification: true,
             request_variables: vec![],
+            file_path: None,
+            auth_type: None,
+            auth_bearer: None,
+            auth_basic_username: None,
+            auth_basic_password: None,
         };
 
         let resolved = resolve_request(&hbs, &request, &variables).unwrap();
@@ -230,6 +252,11 @@ mod tests {
             timeout_ms: None,
             skip_ssl_verification: false,
             request_variables: vec![],
+            file_path: None,
+            auth_type: None,
+            auth_bearer: None,
+            auth_basic_username: None,
+            auth_basic_password: None,
         };
 
         let resolved = resolve_request(&hbs, &request, &variables).unwrap();
@@ -271,6 +298,11 @@ mod tests {
             timeout_ms: None,
             skip_ssl_verification: false,
             request_variables: vec![],
+            file_path: None,
+            auth_type: None,
+            auth_bearer: None,
+            auth_basic_username: None,
+            auth_basic_password: None,
         };
 
         let resolved = resolve_request(&hbs, &request, &variables).unwrap();

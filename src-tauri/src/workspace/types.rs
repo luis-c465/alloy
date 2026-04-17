@@ -32,3 +32,19 @@ pub struct WorkspaceInfo {
     pub path: String,
     pub name: String,
 }
+
+#[taurpc::ipc_type]
+pub struct FolderConfig {
+    pub headers: Vec<KeyValue>,
+    pub variables: Vec<KeyValue>,
+    pub auth_type: String,
+    pub auth_bearer: Option<String>,
+    pub auth_basic_username: Option<String>,
+    pub auth_basic_password: Option<String>,
+}
+
+#[taurpc::ipc_type]
+pub struct FolderConfigEntry {
+    pub folder_path: String,
+    pub config: FolderConfig,
+}

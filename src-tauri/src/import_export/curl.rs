@@ -244,6 +244,11 @@ pub fn curl_to_request(curl_command: &str) -> Result<HttpRequestData, AppError> 
         timeout_ms,
         skip_ssl_verification,
         request_variables: Vec::new(),
+        file_path: None,
+        auth_type: None,
+        auth_bearer: None,
+        auth_basic_username: None,
+        auth_basic_password: None,
     })
 }
 
@@ -588,6 +593,11 @@ mod tests {
             timeout_ms: Some(2_500),
             skip_ssl_verification: true,
             request_variables: Vec::new(),
+            file_path: None,
+            auth_type: None,
+            auth_bearer: None,
+            auth_basic_username: None,
+            auth_basic_password: None,
         }
     }
 

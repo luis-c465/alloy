@@ -7,10 +7,11 @@ use tokio::sync::OnceCell;
 use crate::{
     error::AppError,
     workspace::{
+        folder_config,
         fs,
         parser::parse_http_file,
         serializer::serialize_http_file,
-        types::{FileEntry, HttpFileData},
+        types::{FileEntry, FolderConfig, FolderConfigEntry, HttpFileData},
     },
 };
 
@@ -33,6 +34,18 @@ pub trait WorkspaceApi {
     async fn delete_path(target_path: String) -> Result<(), AppError>;
     async fn rename_path(from_path: String, to_path: String) -> Result<(), AppError>;
     async fn ensure_workspace(workspace_path: String) -> Result<(), AppError>;
+    async fn get_folder_config(
+        workspace_path: String,
+        folder_path: String,
+    ) -> Result<FolderConfig, AppError>;
+    async fn set_folder_config(
+        workspace_path: String,
+        folder_path: String,
+        config: FolderConfig,
+    ) -> Result<(), AppError>;
+    async fn list_folder_configs(
+        workspace_path: String,
+    ) -> Result<Vec<FolderConfigEntry>, AppError>;
 }
 
 #[derive(Clone)]
@@ -227,6 +240,89 @@ impl WorkspaceApi for WorkspaceApiImpl {
         fs::ensure_alloy_dir(&workspace).await?;
         Ok(())
     }
+
+    async fn get_folder_config(
+        self,
+        workspace_path: String,
+        folder_path: String,
+    ) -> Result<FolderConfig, AppError> {
+        let workspace = validate_workspace_path(&workspace_path)?;
+        let folder = validate_folder_path_in_workspace(&workspace, &folder_path)?;
+
+        folder_config::read_folder_config(&folder).await
+    }
+
+    async fn set_folder_config(
+        self,
+        workspace_path: String,
+        folder_path: String,
+        config: FolderConfig,
+    ) -> Result<(), AppError> {
+        let workspace = validate_workspace_path(&workspace_path)?;
+        let folder = validate_folder_path_in_workspace(&workspace, &folder_path)?;
+
+        folder_config::write_folder_config(&folder, &config).await
+    }
+
+    async fn list_folder_configs(
+        self,
+        workspace_path: String,
+    ) -> Result<Vec<FolderConfigEntry>, AppError> {
+        let workspace = validate_workspace_path(&workspace_path)?;
+        let folders = list_directories_recursive(&workspace, 0)?;
+        let mut entries = Vec::new();
+
+        for folder in folders {
+            if !folder_config::folder_config_exists(&folder).await? {
+                continue;
+            }
+            let config = folder_config::read_folder_config(&folder).await?;
+            entries.push(FolderConfigEntry {
+                folder_path: folder.to_string_lossy().into_owned(),
+                config,
+            });
+        }
+
+        Ok(entries)
+    }
+}
+
+const MAX_FOLDER_SCAN_DEPTH: usize = 10;
+
+fn list_directories_recursive(path: &Path, depth: usize) -> Result<Vec<PathBuf>, AppError> {
+    if depth > MAX_FOLDER_SCAN_DEPTH {
+        return Ok(Vec::new());
+    }
+
+    let mut results = vec![path.to_path_buf()];
+    let read_dir = std::fs::read_dir(path).map_err(|error| {
+        AppError::IoError(format!("Failed to list directory {}: {error}", path.display()))
+    })?;
+
+    for entry in read_dir {
+        let entry = entry.map_err(|error| {
+            AppError::IoError(format!("Failed to read directory entry: {error}"))
+        })?;
+        let file_type = entry.file_type().map_err(|error| {
+            AppError::IoError(format!(
+                "Failed to read file type for {}: {error}",
+                entry.path().display()
+            ))
+        })?;
+        if !file_type.is_dir() || file_type.is_symlink() {
+            continue;
+        }
+
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') && name != ".alloy" {
+            continue;
+        }
+
+        let child_path = entry.path();
+        results.extend(list_directories_recursive(&child_path, depth + 1)?);
+    }
+
+    Ok(results)
 }
 
 fn validate_workspace_path(workspace_path: &str) -> Result<PathBuf, AppError> {
@@ -252,6 +348,24 @@ fn validate_workspace_path(workspace_path: &str) -> Result<PathBuf, AppError> {
             path.display()
         ))
     })
+}
+
+fn validate_folder_path_in_workspace(
+    workspace: &Path,
+    folder_path: &str,
+) -> Result<PathBuf, AppError> {
+    let path = PathBuf::from(folder_path);
+    reject_path_traversal(&path)?;
+    let canonical = fs::assert_within_directory(workspace, &path)?;
+
+    if !canonical.is_dir() {
+        return Err(AppError::IoError(format!(
+            "Folder path is not a directory: {}",
+            canonical.display()
+        )));
+    }
+
+    Ok(canonical)
 }
 
 /// Reject paths that contain `..` segments, preventing directory traversal.

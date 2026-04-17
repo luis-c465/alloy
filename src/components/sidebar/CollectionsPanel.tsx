@@ -20,6 +20,7 @@ import {
   createDirectory,
   createHttpFile,
   deletePath,
+  getFolderConfig,
   readHttpFile,
   renamePath,
 } from "~/lib/api";
@@ -92,6 +93,7 @@ export function CollectionsPanel() {
   const fileTree = fileTreeQuery.data ?? fallbackFileTree;
 
   const focusOrOpenRequestInTab = useRequestStore((state) => state.focusOrOpenRequestInTab);
+  const openFolderTab = useRequestStore((state) => state.openFolderTab);
   const activeFilePath = useRequestStore(
     (state) => state.tabs.find((tab) => tab.id === state.activeTabId)?.filePath ?? null,
   );
@@ -280,6 +282,23 @@ export function CollectionsPanel() {
     setRenamingPath(entry.path);
     setRenameDraft(entry.name);
     setSelectedPath(entry.path);
+  };
+
+  const handleEditFolderProperties = async (entry: FileEntry) => {
+    if (!workspacePath || isBusy || !entry.is_dir) {
+      return;
+    }
+
+    setError(null);
+    setIsBusy(true);
+    try {
+      const config = await getFolderConfig(workspacePath, entry.path);
+      await openFolderTab(entry.path, config);
+    } catch (openError) {
+      setError(openError instanceof Error ? openError.message : "Failed to open folder properties");
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const handleToggleDirectory = (path: string, expanded: boolean) => {
@@ -506,6 +525,9 @@ export function CollectionsPanel() {
         onCancelRename={handleCancelRename}
         onDelete={(entryToDelete) => {
           handleRequestDelete(entryToDelete);
+        }}
+        onEditFolderProperties={(entryToEdit) => {
+          void handleEditFolderProperties(entryToEdit);
         }}
       >
         <div className="min-h-0 flex-1 overflow-y-auto py-1">

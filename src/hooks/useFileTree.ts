@@ -6,6 +6,7 @@ import { useWorkspaceStore } from "~/stores/workspace-store";
 
 export function useFileTree(workspacePath: string | null) {
   const setFileTree = useWorkspaceStore((state) => state.setFileTree);
+  const refreshFolderConfigs = useWorkspaceStore((state) => state.refreshFolderConfigs);
 
   const query = useQuery({
     queryKey: ["file-tree", workspacePath],
@@ -31,7 +32,8 @@ export function useFileTree(workspacePath: string | null) {
     }
 
     setFileTree(query.data);
-  }, [query.data, setFileTree, workspacePath]);
+    void refreshFolderConfigs();
+  }, [query.data, refreshFolderConfigs, setFileTree, workspacePath]);
 
   return query;
 }

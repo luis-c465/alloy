@@ -28,8 +28,16 @@ const focusUrlBar = (): boolean => {
 const saveActiveTab = (): void => {
   const requestStore = useRequestStore.getState();
   const activeTab = requestStore.tabs.find((tab) => tab.id === requestStore.activeTabId);
+  if (!activeTab) {
+    return;
+  }
 
-  if (activeTab?.filePath) {
+  if (activeTab.tabType === "folder") {
+    void requestStore.saveActiveTab();
+    return;
+  }
+
+  if (activeTab.filePath) {
     void requestStore.saveActiveTab();
     return;
   }

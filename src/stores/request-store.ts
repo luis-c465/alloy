@@ -12,7 +12,9 @@ import type {
 import {
   readHttpFile,
   sendRequestWithEnv as sendRequestWithEnvApi,
+  setFolderConfig,
   writeHttpFile,
+  type FolderConfig,
 } from "~/lib/api";
 import {
   DIRTY_TAB_DECISIONS,
@@ -31,9 +33,11 @@ export interface MultipartField extends ApiMultipartField {
 }
 
 export type BodyType = "none" | "json" | "form-urlencoded" | "form-data" | "raw";
-export type AuthType = "none" | "bearer" | "basic";
+export type AuthType = "none" | "bearer" | "basic" | "inherit";
+export type FolderAuthType = "none" | "bearer" | "basic";
 export type RequestTab = (typeof REQUEST_TABS)[number];
 export type ResponseTab = (typeof RESPONSE_TABS)[number];
+export type FolderEditorTab = "headers" | "variables" | "auth";
 export type DirtyTabEvictionMode = "protect" | "prompt";
 export type NoClosableTabBehavior = "block" | "skip" | "prompt";
 
@@ -55,8 +59,10 @@ const DEFAULT_TAB_LIMIT_SETTINGS: TabLimitSettings = {
 
 export interface Tab {
   id: string;
+  tabType: "request" | "folder";
   name: string;
   filePath: string | null;
+  folderPath: string | null;
   requestIndex: number | null;
   requestName: string | null;
   isDirty: boolean;
@@ -81,6 +87,13 @@ export interface Tab {
   error: string | null;
   activeRequestTab: RequestTab;
   activeResponseTab: ResponseTab;
+  activeFolderTab: FolderEditorTab;
+  folderHeaders: KeyValue[];
+  folderVariables: KeyValue[];
+  folderAuthType: FolderAuthType;
+  folderAuthBearer: string;
+  folderAuthBasicUsername: string;
+  folderAuthBasicPassword: string;
   lastInteractedAt: number;
 }
 
@@ -117,6 +130,13 @@ interface RequestStore {
   setError: (error: string | null) => void;
   setActiveRequestTab: (tab: RequestTab) => void;
   setActiveResponseTab: (tab: ResponseTab) => void;
+  setActiveFolderTab: (tab: FolderEditorTab) => void;
+  setFolderHeaders: (headers: KeyValue[]) => void;
+  setFolderVariables: (variables: KeyValue[]) => void;
+  setFolderAuthType: (authType: FolderAuthType) => void;
+  setFolderAuthBearer: (authBearer: string) => void;
+  setFolderAuthBasicUsername: (username: string) => void;
+  setFolderAuthBasicPassword: (password: string) => void;
   markDirty: () => void;
   markClean: () => void;
   openRequestInTab: (
@@ -129,6 +149,7 @@ interface RequestStore {
     filePath: string,
     requestIndex?: number,
   ) => Promise<string | null>;
+  openFolderTab: (folderPath: string, config: FolderConfig) => Promise<string | null>;
   syncQueryParamsToUrl: () => void;
   syncUrlToQueryParams: () => void;
   saveTab: (id: string) => Promise<boolean>;
@@ -475,6 +496,27 @@ const fromApiKeyValue = ({ key, value, enabled }: ApiKeyValue): KeyValue => ({
   id: crypto.randomUUID(),
 });
 
+const toFolderAuthType = (value: string): FolderAuthType => {
+  if (value === "bearer" || value === "basic") {
+    return value;
+  }
+
+  return "none";
+};
+
+const toFolderConfigFromTab = (tab: Tab): FolderConfig => ({
+  headers: tab.folderHeaders
+    .filter((item) => item.enabled && item.key.trim().length > 0)
+    .map(toApiKeyValue),
+  variables: tab.folderVariables
+    .filter((item) => item.enabled && item.key.trim().length > 0)
+    .map(toApiKeyValue),
+  auth_type: tab.folderAuthType,
+  auth_bearer: tab.folderAuthBearer.trim() ? tab.folderAuthBearer : null,
+  auth_basic_username: tab.folderAuthBasicUsername.trim() ? tab.folderAuthBasicUsername : null,
+  auth_basic_password: tab.folderAuthBasicPassword.trim() ? tab.folderAuthBasicPassword : null,
+});
+
 const toRequestBody = (
   bodyType: BodyType,
   bodyContent: string,
@@ -564,12 +606,16 @@ const getRequestHeaders = (
   tab: Tab,
   environmentVariables: Map<string, string> = new Map(),
 ): ApiKeyValue[] => {
+  if (tab.tabType !== "request") {
+    return [];
+  }
+
   const filteredHeaders = tab.headers.filter((header) => {
     if (!header.enabled) {
       return false;
     }
 
-    if (tab.authType !== "none" && header.key.trim().toLowerCase() === "authorization") {
+    if ((tab.authType === "bearer" || tab.authType === "basic") && header.key.trim().toLowerCase() === "authorization") {
       return false;
     }
 
@@ -633,37 +679,54 @@ const getFileTabName = (filePath: string, requestIndex: number): string => {
   return requestIndex > 0 ? `${fileName} #${requestIndex + 1}` : fileName;
 };
 
-const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => ({
-  id: crypto.randomUUID(),
-  name: "New Request",
-  filePath: null,
-  requestIndex: null,
-  requestName: null,
-  isDirty: false,
-  method: "GET",
-  url: "",
-  headers: [createEmptyKeyValue()],
-  variables: [createEmptyKeyValue()],
-  queryParams: [],
-  bodyType: "none",
-  bodyContent: "",
-  bodyFormData: [],
-  multipartFields: [],
-  rawContentType: "text/plain",
-  authType: "none",
-  authBearer: "",
-  authBasicUsername: "",
-  authBasicPassword: "",
-  skipSslVerification: false,
-  timeoutMs: null,
-  response: null,
-  isLoading: false,
-  error: null,
-  activeRequestTab: "params",
-  activeResponseTab: "body",
-  lastInteractedAt: Date.now(),
-  ...overrides,
-});
+const createDefaultTab = (overrides: Partial<Tab> = {}): Tab => {
+  const tab: Partial<Tab> = {
+    id: crypto.randomUUID(),
+    tabType: "request",
+    name: "New Request",
+    filePath: null,
+    folderPath: null,
+    requestIndex: null,
+    requestName: null,
+    isDirty: false,
+    method: "GET",
+    url: "",
+    headers: [createEmptyKeyValue()],
+    variables: [createEmptyKeyValue()],
+    queryParams: [],
+    bodyType: "none",
+    bodyContent: "",
+    bodyFormData: [],
+    multipartFields: [],
+    rawContentType: "text/plain",
+    authType: "inherit",
+    authBearer: "",
+    authBasicUsername: "",
+    authBasicPassword: "",
+    skipSslVerification: false,
+    timeoutMs: null,
+    response: null,
+    isLoading: false,
+    error: null,
+    activeRequestTab: "params",
+    activeResponseTab: "body",
+    activeFolderTab: "headers",
+    folderHeaders: [createEmptyKeyValue()],
+    folderVariables: [createEmptyKeyValue()],
+    folderAuthType: "none",
+    folderAuthBearer: "",
+    folderAuthBasicUsername: "",
+    folderAuthBasicPassword: "",
+    lastInteractedAt: Date.now(),
+    ...overrides,
+  };
+
+  return {
+    ...(tab as Tab),
+    tabType: tab.tabType ?? "request",
+    folderPath: tab.folderPath ?? null,
+  };
+};
 
 const cloneKeyValue = ({ key, value, enabled }: KeyValue): KeyValue => ({
   key,
@@ -813,20 +876,35 @@ const performCloseTab = (tabs: Tab[], activeTabId: string | null, tabId: string)
 const toHttpFileRequest = (
   tab: Tab,
   commands: Array<[string, string | null]> = [],
-): HttpFileRequest => ({
-  name: tab.requestName?.trim() || null,
-  method: tab.method || "GET",
-  url: tab.url,
-  headers: tab.headers
-    .filter((header) => header.enabled && header.key.trim().length > 0)
-    .map(toApiKeyValue),
-  variables: tab.variables
-    .filter((variable) => variable.enabled && variable.key.trim().length > 0)
-    .map(toApiKeyValue),
-  body: toHttpFileBody(tab),
-  body_type: tab.bodyType,
-  commands,
-});
+): HttpFileRequest => {
+  if (tab.tabType !== "request") {
+    return {
+      name: null,
+      method: "GET",
+      url: "",
+      headers: [],
+      variables: [],
+      body: null,
+      body_type: "none",
+      commands,
+    };
+  }
+
+  return {
+    name: tab.requestName?.trim() || null,
+    method: tab.method || "GET",
+    url: tab.url,
+    headers: tab.headers
+      .filter((header) => header.enabled && header.key.trim().length > 0)
+      .map(toApiKeyValue),
+    variables: tab.variables
+      .filter((variable) => variable.enabled && variable.key.trim().length > 0)
+      .map(toApiKeyValue),
+    body: toHttpFileBody(tab),
+    body_type: tab.bodyType,
+    commands,
+  };
+};
 
 const buildExistingFileSavePayload = async (
   tab: Tab,
@@ -883,6 +961,27 @@ const saveTabById = async (
   const tab = state.tabs.find((item) => item.id === tabId);
   if (!tab) {
     return false;
+  }
+
+  if (tab.tabType === "folder") {
+    const { workspacePath, setFolderConfigCache } = useWorkspaceStore.getState();
+    if (!workspacePath || !tab.folderPath) {
+      return false;
+    }
+
+    const folderConfig = toFolderConfigFromTab(tab);
+    await setFolderConfig(workspacePath, tab.folderPath, folderConfig);
+    setFolderConfigCache(tab.folderPath, folderConfig);
+
+    setStore((currentState) => ({
+      tabs: currentState.tabs.map((item) => (
+        item.id === tab.id
+          ? { ...item, isDirty: false }
+          : item
+      )),
+    }));
+
+    return true;
   }
 
   const selectedPath = forceSaveAs || !tab.filePath
@@ -971,6 +1070,9 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
   duplicateTab: (id) => {
     const sourceTab = get().tabs.find((item) => item.id === id);
     if (!sourceTab) {
+      return null;
+    }
+    if (sourceTab.tabType !== "request") {
       return null;
     }
 
@@ -1109,6 +1211,13 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
   setActiveRequestTab: (activeRequestTab) => get().updateActiveTab({ activeRequestTab }),
   setActiveResponseTab: (activeResponseTab) =>
     get().updateActiveTab({ activeResponseTab }),
+  setActiveFolderTab: (activeFolderTab) => get().updateActiveTab({ activeFolderTab }),
+  setFolderHeaders: (folderHeaders) => get().updateActiveTab(withInteraction({ folderHeaders, isDirty: true })),
+  setFolderVariables: (folderVariables) => get().updateActiveTab(withInteraction({ folderVariables, isDirty: true })),
+  setFolderAuthType: (folderAuthType) => get().updateActiveTab(withInteraction({ folderAuthType, isDirty: true })),
+  setFolderAuthBearer: (folderAuthBearer) => get().updateActiveTab(withInteraction({ folderAuthBearer, isDirty: true })),
+  setFolderAuthBasicUsername: (folderAuthBasicUsername) => get().updateActiveTab(withInteraction({ folderAuthBasicUsername, isDirty: true })),
+  setFolderAuthBasicPassword: (folderAuthBasicPassword) => get().updateActiveTab(withInteraction({ folderAuthBasicPassword, isDirty: true })),
   markDirty: () => get().updateActiveTab(withInteraction({ isDirty: true })),
   markClean: () => get().updateActiveTab({ isDirty: false }),
   openRequestInTab: async (request, filePath, requestIndex = 0) => {
@@ -1136,8 +1245,10 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     const requestName = request.name?.trim() || null;
     const tabName = requestName || getFileTabName(filePath, requestIndex);
     const tab = createDefaultTab({
+      tabType: "request",
       name: tabName,
       filePath,
+      folderPath: null,
       requestIndex,
       requestName,
       isDirty: false,
@@ -1172,6 +1283,76 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     }));
 
     return tab.id;
+  },
+  openFolderTab: async (folderPath, config) => {
+    const existingTab = get().tabs.find(
+      (tab) => tab.tabType === "folder" && tab.folderPath === folderPath,
+    );
+    if (existingTab) {
+      set({ activeTabId: existingTab.id });
+      return existingTab.id;
+    }
+
+    const state = get();
+    const decision = await maybeEnforceTabLimitBeforeOpen(
+      state.tabs,
+      state.activeTabId,
+      state.tabLimitSettings,
+    );
+
+    if (decision.kind === "deny") {
+      set({ tabLimitNotice: decision.notice });
+      return null;
+    }
+
+    if (decision.kind === "close") {
+      await get().closeTab(decision.tabId);
+      if (get().tabs.some((tab) => tab.id === decision.tabId)) {
+        set({ tabLimitNotice: buildTabLimitNotice(state.tabLimitSettings.limit) });
+        return null;
+      }
+    }
+
+    const folderName = folderPath.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "Folder";
+    const tab = createDefaultTab({
+      tabType: "folder",
+      name: `${folderName} Properties`,
+      folderPath,
+      filePath: null,
+      requestIndex: null,
+      requestName: null,
+      isDirty: false,
+      folderHeaders: config.headers.map(fromApiKeyValue),
+      folderVariables: config.variables.map(fromApiKeyValue),
+      folderAuthType: toFolderAuthType(config.auth_type),
+      folderAuthBearer: config.auth_bearer ?? "",
+      folderAuthBasicUsername: config.auth_basic_username ?? "",
+      folderAuthBasicPassword: config.auth_basic_password ?? "",
+    });
+
+    // Use the functional-updater form of set() so the duplicate check runs
+    // against the very latest state snapshot. This prevents a race condition
+    // where two rapid calls both pass the early-return check above but then
+    // both try to insert, creating two tabs for the same folder.
+    let resolvedTabId: string | null = null;
+    set((currentState) => {
+      const raceWinner = currentState.tabs.find(
+        (t) => t.tabType === "folder" && t.folderPath === folderPath,
+      );
+      if (raceWinner) {
+        resolvedTabId = raceWinner.id;
+        return { activeTabId: raceWinner.id };
+      }
+
+      resolvedTabId = tab.id;
+      return {
+        tabs: [...currentState.tabs, tab],
+        activeTabId: tab.id,
+        tabLimitNotice: null,
+      };
+    });
+
+    return resolvedTabId;
   },
   focusOrOpenRequestInTab: async (request, filePath, requestIndex = 0) => {
     const existingTab = get().tabs.find(
@@ -1316,6 +1497,9 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
     if (!tab) {
       return;
     }
+    if (tab.tabType !== "request") {
+      return;
+    }
 
     set((state) => ({
       tabs: touchTabById(state.tabs, targetTabId, Date.now()),
@@ -1344,6 +1528,11 @@ export const useRequestStore = create<RequestStore>()((set, get) => ({
       request_variables: tab.variables
         .filter((variable) => variable.enabled && variable.key.trim().length > 0)
         .map(toApiKeyValue),
+      file_path: tab.filePath,
+      auth_type: tab.authType,
+      auth_bearer: tab.authBearer,
+      auth_basic_username: tab.authBasicUsername,
+      auth_basic_password: tab.authBasicPassword,
     };
 
     const requestToken = getNextRequestToken(targetTabId);

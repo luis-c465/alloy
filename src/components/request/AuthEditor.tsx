@@ -14,9 +14,21 @@ import {
   resolveTemplateString,
   useRequestStore,
   type AuthType,
+  type FolderAuthType,
 } from "~/stores/request-store";
 
-const AUTH_TYPE_OPTIONS: Array<{ value: AuthType; label: string }> = [
+type AuthEditorProps = {
+  authScope?: "request" | "folder";
+};
+
+const REQUEST_AUTH_TYPE_OPTIONS: Array<{ value: AuthType; label: string }> = [
+  { value: "inherit", label: "Inherit" },
+  { value: "none", label: "None" },
+  { value: "bearer", label: "Bearer Token" },
+  { value: "basic", label: "Basic Auth" },
+];
+
+const FOLDER_AUTH_TYPE_OPTIONS: Array<{ value: FolderAuthType; label: string }> = [
   { value: "none", label: "None" },
   { value: "bearer", label: "Bearer Token" },
   { value: "basic", label: "Basic Auth" },
@@ -28,7 +40,7 @@ const AUTH_TYPE_OPTIONS: Array<{ value: AuthType; label: string }> = [
 // change and trigger an infinite re-render loop.
 const EMPTY_ENV_VARIABLES: KeyValue[] = [];
 
-export function AuthEditor() {
+export function AuthEditor({ authScope = "request" }: AuthEditorProps) {
   const activeTab = useRequestStore((state) => {
     const activeTabId = state.activeTabId ?? state.tabs[0]?.id;
     if (!activeTabId) {
@@ -45,7 +57,12 @@ export function AuthEditor() {
   const setAuthBasicPassword = useRequestStore(
     (state) => state.setAuthBasicPassword,
   );
+  const setFolderAuthType = useRequestStore((state) => state.setFolderAuthType);
+  const setFolderAuthBearer = useRequestStore((state) => state.setFolderAuthBearer);
+  const setFolderAuthBasicUsername = useRequestStore((state) => state.setFolderAuthBasicUsername);
+  const setFolderAuthBasicPassword = useRequestStore((state) => state.setFolderAuthBasicPassword);
   const activeEnvironment = useWorkspaceStore((state) => state.activeEnvironment);
+  const getFolderConfigChain = useWorkspaceStore((state) => state.getFolderConfigChain);
   const activeEnvironmentVariables = useWorkspaceStore((state) => {
     const activeName = state.activeEnvironment;
 
@@ -54,15 +71,57 @@ export function AuthEditor() {
   });
   const [showPassword, setShowPassword] = useState(false);
 
-  const authType = activeTab?.authType ?? "none";
-  const authBearer = activeTab?.authBearer ?? "";
-  const authBasicUsername = activeTab?.authBasicUsername ?? "";
-  const authBasicPassword = activeTab?.authBasicPassword ?? "";
+  const authType = authScope === "folder"
+    ? (activeTab?.folderAuthType ?? "none")
+    : (activeTab?.authType ?? "inherit");
+  const authBearer = authScope === "folder"
+    ? (activeTab?.folderAuthBearer ?? "")
+    : (activeTab?.authBearer ?? "");
+  const authBasicUsername = authScope === "folder"
+    ? (activeTab?.folderAuthBasicUsername ?? "")
+    : (activeTab?.authBasicUsername ?? "");
+  const authBasicPassword = authScope === "folder"
+    ? (activeTab?.folderAuthBasicPassword ?? "")
+    : (activeTab?.authBasicPassword ?? "");
   const hasManualAuthorizationHeader =
     activeTab?.headers.some(
       (header) =>
         header.enabled && header.key.trim().toLowerCase() === "authorization",
     ) ?? false;
+
+  const inheritedFolderAuth = useMemo(() => {
+    if (authScope !== "request" || !activeTab || activeTab.tabType !== "request") {
+      return null;
+    }
+
+    const chain = getFolderConfigChain(activeTab.filePath);
+    if (chain.length === 0) {
+      return null;
+    }
+
+    // Walk from innermost folder outward, same logic as the backend, to find
+    // the first folder that actually configures auth (auth_type != "none").
+    const source = [...chain].reverse().find((entry) => entry.config.auth_type !== "none");
+    return source ?? null;
+  }, [activeTab, authScope, getFolderConfigChain]);
+
+  const effectiveAuthType: AuthType | FolderAuthType =
+    authScope === "request" && authType === "inherit"
+      ? ((inheritedFolderAuth?.config.auth_type as FolderAuthType | undefined) ?? "none")
+      : authType;
+
+  const effectiveBearer =
+    authScope === "request" && authType === "inherit"
+      ? (inheritedFolderAuth?.config.auth_bearer ?? "")
+      : authBearer;
+  const effectiveUsername =
+    authScope === "request" && authType === "inherit"
+      ? (inheritedFolderAuth?.config.auth_basic_username ?? "")
+      : authBasicUsername;
+  const effectivePassword =
+    authScope === "request" && authType === "inherit"
+      ? (inheritedFolderAuth?.config.auth_basic_password ?? "")
+      : authBasicPassword;
 
   const previewValue = useMemo(() => {
     const environmentVariables = getEnvironmentVariableMap(activeEnvironmentVariables);
@@ -70,29 +129,67 @@ export function AuthEditor() {
     const variables = new Map([...environmentVariables, ...requestVariables]);
 
     return getAuthorizationHeaderValue(
-      authType,
-      resolveTemplateString(authBearer, variables),
-      resolveTemplateString(authBasicUsername, variables),
-      resolveTemplateString(authBasicPassword, variables),
+      effectiveAuthType,
+      resolveTemplateString(effectiveBearer, variables),
+      resolveTemplateString(effectiveUsername, variables),
+      resolveTemplateString(effectivePassword, variables),
     );
   }, [
     activeTab?.variables,
     activeEnvironmentVariables,
-    authBasicPassword,
-    authBasicUsername,
-    authBearer,
-    authType,
+    effectiveAuthType,
+    effectiveBearer,
+    effectivePassword,
+    effectiveUsername,
   ]);
+
+  const authOptions = authScope === "folder" ? FOLDER_AUTH_TYPE_OPTIONS : REQUEST_AUTH_TYPE_OPTIONS;
+
+  const setAuthTypeForScope = (value: string) => {
+    if (authScope === "folder") {
+      setFolderAuthType(value as FolderAuthType);
+      return;
+    }
+
+    setAuthType(value as AuthType);
+  };
+
+  const setAuthBearerForScope = (value: string) => {
+    if (authScope === "folder") {
+      setFolderAuthBearer(value);
+      return;
+    }
+
+    setAuthBearer(value);
+  };
+
+  const setAuthUsernameForScope = (value: string) => {
+    if (authScope === "folder") {
+      setFolderAuthBasicUsername(value);
+      return;
+    }
+
+    setAuthBasicUsername(value);
+  };
+
+  const setAuthPasswordForScope = (value: string) => {
+    if (authScope === "folder") {
+      setFolderAuthBasicPassword(value);
+      return;
+    }
+
+    setAuthBasicPassword(value);
+  };
 
   return (
     <div className="flex h-full min-h-[100px] flex-col gap-3 overflow-auto">
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-md border border-border bg-muted/30 p-0.5">
-          {AUTH_TYPE_OPTIONS.map((option) => (
+          {authOptions.map((option) => (
             <button
               key={option.value}
               type="button"
-              onClick={() => setAuthType(option.value)}
+              onClick={() => setAuthTypeForScope(option.value)}
               className={cn(
                 "rounded-sm px-2 py-1 text-xs font-medium transition-colors",
                 authType === option.value
@@ -106,13 +203,28 @@ export function AuthEditor() {
         </div>
       </div>
 
-      {authType === "none" ? (
-        <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
-          This request does not use authentication.
+      {authScope === "request" && authType === "inherit" ? (
+        <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+          {inheritedFolderAuth
+            ? (() => {
+                const type = inheritedFolderAuth.config.auth_type;
+                const label = type === "bearer" ? "Bearer Token" : type === "basic" ? "Basic Auth" : type;
+                const folderName = inheritedFolderAuth.folderPath.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? inheritedFolderAuth.folderPath;
+                return `Inheriting ${label} from "${folderName}"`;
+              })()
+            : "No folder auth configured. Effective auth is None."}
         </div>
       ) : null}
 
-      {authType === "bearer" ? (
+      {effectiveAuthType === "none" ? (
+        <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
+          {authScope === "folder"
+            ? "This folder does not apply authentication."
+            : "This request does not use authentication."}
+        </div>
+      ) : null}
+
+      {effectiveAuthType === "bearer" ? (
         <div className="flex flex-col gap-3 rounded-md border border-border p-3">
           <div className="space-y-1.5">
             <label
@@ -124,7 +236,7 @@ export function AuthEditor() {
             <VariableInput
               value={authBearer}
               placeholder="Enter token..."
-              onChange={setAuthBearer}
+              onChange={setAuthBearerForScope}
               singleLine
               className="h-9"
             />
@@ -134,7 +246,7 @@ export function AuthEditor() {
             </p>
           </div>
 
-          {!authBearer.trim() ? (
+          {!effectiveBearer.trim() ? (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
               Bearer token is empty, so no Authorization header will be added.
             </div>
@@ -142,7 +254,7 @@ export function AuthEditor() {
         </div>
       ) : null}
 
-      {authType === "basic" ? (
+      {effectiveAuthType === "basic" ? (
         <div className="flex flex-col gap-3 rounded-md border border-border p-3">
           <div className="space-y-1.5">
             <label
@@ -154,7 +266,7 @@ export function AuthEditor() {
             <VariableInput
               value={authBasicUsername}
               placeholder="Enter username..."
-              onChange={setAuthBasicUsername}
+              onChange={setAuthUsernameForScope}
               singleLine
               className="h-9"
             />
@@ -173,8 +285,9 @@ export function AuthEditor() {
                 type={showPassword ? "text" : "password"}
                 value={authBasicPassword}
                 placeholder="Enter password..."
-                onChange={(event) => setAuthBasicPassword(event.target.value)}
+                onChange={(event) => setAuthPasswordForScope(event.target.value)}
                 className="font-mono"
+                disabled={authScope === "request" && authType === "inherit"}
               />
               <Button
                 type="button"
@@ -209,9 +322,11 @@ export function AuthEditor() {
           </p>
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          The Authorization header will be auto-added when sending the request.
-        </p>
+        {authScope === "request" ? (
+          <p className="text-xs text-muted-foreground">
+            The Authorization header will be auto-added when sending the request.
+          </p>
+        ) : null}
 
         {activeEnvironment ? (
           <p className="text-xs text-muted-foreground">
@@ -219,7 +334,7 @@ export function AuthEditor() {
           </p>
         ) : null}
 
-        {hasManualAuthorizationHeader && authType !== "none" ? (
+        {authScope === "request" && hasManualAuthorizationHeader && effectiveAuthType !== "none" ? (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
             A manual Authorization header exists in the Headers tab and will be
             replaced by this auth preset when the request is sent.

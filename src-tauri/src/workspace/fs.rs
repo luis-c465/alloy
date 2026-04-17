@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::{future::Future, pin::Pin};
 
-use crate::{error::AppError, workspace::types::FileEntry};
+use crate::{
+    error::AppError,
+    workspace::{folder_config::FOLDER_CONFIG_FILE_NAME, types::FileEntry},
+};
 
 const MAX_DEPTH: usize = 10;
 
@@ -93,6 +96,10 @@ fn list_directory_recursive<'a>(
             let is_dir = file_type.is_dir();
 
             if is_dir && name.starts_with('.') && name != ".alloy" {
+                continue;
+            }
+
+            if !is_dir && name == FOLDER_CONFIG_FILE_NAME {
                 continue;
             }
 

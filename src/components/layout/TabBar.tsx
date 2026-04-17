@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { IconPlus, IconX } from "@tabler/icons-react";
+import { IconFolder, IconPlus, IconX } from "@tabler/icons-react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -64,6 +64,7 @@ export function TabBar() {
             const method = tab.method.toUpperCase();
             const hasTabsToRight = tabIndex >= 0 && tabIndex < tabs.length - 1;
             const hasOtherTabs = tabs.length > 1;
+            const isFolderTab = tab.tabType === "folder";
 
             return (
               <ContextMenu key={tab.id}>
@@ -95,16 +96,22 @@ export function TabBar() {
                       }}
                       className="flex min-w-0 flex-1 items-center gap-2 pl-2 text-xs"
                     >
-                      <span
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          methodColorClasses[method] ?? methodColorClasses.GET,
-                        )}
-                      />
+                      {isFolderTab ? (
+                        <IconFolder className="size-3 shrink-0 text-amber-500" />
+                      ) : (
+                        <>
+                          <span
+                            className={cn(
+                              "size-1.5 shrink-0 rounded-full",
+                              methodColorClasses[method] ?? methodColorClasses.GET,
+                            )}
+                          />
 
-                      <span className="shrink-0 text-[10px] font-semibold tracking-wide">
-                        {method}
-                      </span>
+                          <span className="shrink-0 text-[10px] font-semibold tracking-wide">
+                            {method}
+                          </span>
+                        </>
+                      )}
 
                       <span className="truncate text-left">{tab.name || tab.url || "New Request"}</span>
 
@@ -132,6 +139,7 @@ export function TabBar() {
                 <ContextMenuContent className="w-52">
                   <ContextMenuGroup>
                     <ContextMenuItem
+                      disabled={isFolderTab}
                       onSelect={() => {
                         duplicateTab(tab.id);
                       }}
@@ -148,6 +156,7 @@ export function TabBar() {
                       <ContextMenuShortcut>Mod+S</ContextMenuShortcut>
                     </ContextMenuItem>
                     <ContextMenuItem
+                      disabled={isFolderTab}
                       onSelect={() => {
                         setActiveTab(tab.id);
                         void saveActiveTabAs();

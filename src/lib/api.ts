@@ -19,6 +19,30 @@ const api = createTauRPCProxy();
 
 export { api };
 
+export interface FolderConfig {
+  headers: KeyValue[];
+  variables: KeyValue[];
+  auth_type: "none" | "bearer" | "basic";
+  auth_bearer: string | null;
+  auth_basic_username: string | null;
+  auth_basic_password: string | null;
+}
+
+export interface FolderConfigEntry {
+  folder_path: string;
+  config: FolderConfig;
+}
+
+const workspaceApi = api.workspace as unknown as {
+  get_folder_config: (workspacePath: string, folderPath: string) => Promise<FolderConfig>;
+  set_folder_config: (
+    workspacePath: string,
+    folderPath: string,
+    config: FolderConfig,
+  ) => Promise<void>;
+  list_folder_configs: (workspacePath: string) => Promise<FolderConfigEntry[]>;
+};
+
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
@@ -149,6 +173,36 @@ export const renamePath = async (
   toPath: string,
 ): Promise<void> => {
   await withApiError(api.workspace.rename_path(fromPath, toPath), "Failed to rename path");
+};
+
+export const getFolderConfig = async (
+  workspacePath: string,
+  folderPath: string,
+): Promise<FolderConfig> => {
+  return withApiError(
+    workspaceApi.get_folder_config(workspacePath, folderPath),
+    "Failed to load folder config",
+  );
+};
+
+export const setFolderConfig = async (
+  workspacePath: string,
+  folderPath: string,
+  config: FolderConfig,
+): Promise<void> => {
+  await withApiError(
+    workspaceApi.set_folder_config(workspacePath, folderPath, config),
+    "Failed to save folder config",
+  );
+};
+
+export const listFolderConfigs = async (
+  workspacePath: string,
+): Promise<FolderConfigEntry[]> => {
+  return withApiError(
+    workspaceApi.list_folder_configs(workspacePath),
+    "Failed to list folder configs",
+  );
 };
 
 export const listEnvironments = async (

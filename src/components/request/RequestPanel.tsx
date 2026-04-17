@@ -9,14 +9,17 @@ import { RequestBreadcrumb } from "~/components/request/RequestBreadcrumb";
 import { SendButton } from "~/components/request/SendButton";
 import { UrlBar } from "~/components/request/UrlBar";
 import { VariablesEditor } from "~/components/request/VariablesEditor";
+import { FolderPropertiesPanel } from "~/components/folder/FolderPropertiesPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { useActiveTab } from "~/hooks/useActiveTab";
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { isRequestTab } from "~/lib/constants";
 import { useRequestStore } from "~/stores/request-store";
 
 export function RequestPanel() {
+  const activeTab = useActiveTab();
   const activeRequestTab = useActiveTabField("activeRequestTab", "params");
-  const authType = useActiveTabField("authType", "none");
+  const authType = useActiveTabField("authType", "inherit");
   const skipSslVerification = useActiveTabField("skipSslVerification", false);
   const timeoutMs = useActiveTabField("timeoutMs", null);
   const variables = useActiveTabField("variables", []);
@@ -27,6 +30,11 @@ export function RequestPanel() {
   const hasActiveVariables = variables.some((variable) => (
     variable.enabled && variable.key.trim().length > 0
   ));
+  const hasAuthManagedHeader = authType === "bearer" || authType === "basic";
+
+  if (activeTab?.tabType === "folder") {
+    return <FolderPropertiesPanel />;
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -79,7 +87,7 @@ export function RequestPanel() {
 
           <TabsContent value="headers" className="min-h-0 flex-1 overflow-auto">
             <div className="flex h-full flex-col gap-3">
-              {authType !== "none" ? (
+              {hasAuthManagedHeader ? (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                   Authorization header is managed by the Auth tab.
                 </div>

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 import type { EnvironmentData, FileEntry } from "~/bindings";
-import { api } from "~/lib/api";
+import { api, listFolderConfigs, type FolderConfig } from "~/lib/api";
 import { joinPath } from "~/lib/path";
 import { SIDEBAR_TABS } from "~/lib/constants";
 
@@ -17,6 +17,7 @@ interface WorkspaceStore {
   fileTree: FileEntry[];
   selectedPath: string | null;
   expandedState: Record<string, boolean>;
+  folderConfigs: Record<string, FolderConfig>;
   initWorkspace: () => Promise<void>;
   setWorkspace: (path: string | null) => Promise<void>;
   setSidebarVisible: (visible: boolean) => void;
@@ -28,6 +29,10 @@ interface WorkspaceStore {
   setPathExpanded: (path: string, expanded: boolean) => void;
   revealPath: (path: string) => void;
   refreshFileTree: () => Promise<void>;
+  refreshFolderConfigs: () => Promise<void>;
+  setFolderConfigCache: (folderPath: string, config: FolderConfig) => void;
+  getFolderConfig: (folderPath: string) => FolderConfig | null;
+  getFolderConfigChain: (filePath: string | null) => Array<{ folderPath: string; config: FolderConfig }>;
 }
 
 const LAST_WORKSPACE_KEY = "alloy-last-workspace";
@@ -49,6 +54,33 @@ const getWorkspaceName = (path: string): string => {
 };
 
 const normalizePath = (path: string): string => path.replace(/\\/g, "/").replace(/\/+$/, "");
+
+const getPathSeparator = (path: string): string => (
+  path.includes("\\") && !path.includes("/") ? "\\" : "/"
+);
+
+const joinPathWithSeparator = (basePath: string, segment: string): string => {
+  const separator = getPathSeparator(basePath);
+  if (basePath.endsWith("/") || basePath.endsWith("\\")) {
+    return `${basePath}${segment}`;
+  }
+
+  return `${basePath}${separator}${segment}`;
+};
+
+const buildFolderChain = (workspacePath: string, filePath: string): string[] => {
+  const segments = getRelativeSegments(workspacePath, filePath);
+  const folderSegments = segments.slice(0, Math.max(0, segments.length - 1));
+  const chain = [workspacePath];
+  let currentPath = workspacePath;
+
+  for (const segment of folderSegments) {
+    currentPath = joinPathWithSeparator(currentPath, segment);
+    chain.push(currentPath);
+  }
+
+  return chain;
+};
 
 const getRelativeSegments = (
   workspacePath: string | null,
@@ -102,6 +134,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
   fileTree: [],
   selectedPath: null,
   expandedState: {},
+  folderConfigs: {},
   initWorkspace: async () => {
     const path = readStoredWorkspacePath();
     if (!path) {
@@ -131,6 +164,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
         fileTree: [],
         selectedPath: null,
         expandedState: {},
+        folderConfigs: {},
       });
       return;
     }
@@ -147,7 +181,10 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
       fileTree: [],
       selectedPath: null,
       expandedState: {},
+      folderConfigs: {},
     });
+
+    await get().refreshFolderConfigs();
   },
   setSidebarVisible: (sidebarVisible) => set({ sidebarVisible }),
   setSidebarTab: (sidebarTab) => set({ sidebarTab }),
@@ -195,11 +232,62 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
   refreshFileTree: async () => {
     const workspacePath = get().workspacePath;
     if (!workspacePath) {
-      set({ fileTree: [] });
+      set({ fileTree: [], folderConfigs: {} });
       return;
     }
 
-    const files = await api.workspace.list_files(workspacePath);
-    set({ fileTree: files });
+    const [files, entries] = await Promise.all([
+      api.workspace.list_files(workspacePath),
+      listFolderConfigs(workspacePath),
+    ]);
+    const nextCache: Record<string, FolderConfig> = {};
+    for (const entry of entries) {
+      nextCache[entry.folder_path] = entry.config;
+    }
+
+    set({ fileTree: files, folderConfigs: nextCache });
+  },
+  refreshFolderConfigs: async () => {
+    const workspacePath = get().workspacePath;
+    if (!workspacePath) {
+      set({ folderConfigs: {} });
+      return;
+    }
+
+    const entries = await listFolderConfigs(workspacePath);
+    const nextCache: Record<string, FolderConfig> = {};
+    for (const entry of entries) {
+      nextCache[entry.folder_path] = entry.config;
+    }
+
+    set({ folderConfigs: nextCache });
+  },
+  setFolderConfigCache: (folderPath, config) => {
+    set((state) => ({
+      folderConfigs: {
+        ...state.folderConfigs,
+        [folderPath]: config,
+      },
+    }));
+  },
+  getFolderConfig: (folderPath) => {
+    const config = get().folderConfigs[folderPath];
+    return config ?? null;
+  },
+  getFolderConfigChain: (filePath) => {
+    if (!filePath) {
+      return [];
+    }
+
+    const workspacePath = get().workspacePath;
+    if (!workspacePath) {
+      return [];
+    }
+
+    const chain = buildFolderChain(workspacePath, filePath);
+    const cache = get().folderConfigs;
+    return chain
+      .filter((folderPath) => Boolean(cache[folderPath]))
+      .map((folderPath) => ({ folderPath, config: cache[folderPath]! }));
   },
 }));

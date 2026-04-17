@@ -7,6 +7,7 @@ use crate::{
         client::ExecutedResponse,
         types::{HttpRequestData, HttpResponseData, KeyValue, RequestBody},
     },
+    workspace::{folder_config, types::FolderConfig},
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use chrono::Utc;
@@ -39,21 +40,37 @@ pub struct ApiImpl {
 }
 
 impl ApiImpl {
-    async fn history_db(&self) -> Result<Arc<HistoryDb>, AppError> {
-        self.db.get().cloned().ok_or_else(|| {
-            AppError::RequestError("History database is not initialized".to_string())
-        })
+    fn enabled_key_values(values: Vec<KeyValue>) -> Vec<KeyValue> {
+        values
+            .into_iter()
+            .filter(|value| value.enabled)
+            .filter(|value| !value.key.trim().is_empty())
+            .collect()
+    }
+
+    fn merge_key_values_by_key(base: &mut Vec<KeyValue>, next_values: Vec<KeyValue>) {
+        for value in next_values {
+            let key = value.key.trim();
+            if key.is_empty() {
+                continue;
+            }
+
+            if let Some(existing_index) = base
+                .iter()
+                .position(|existing| existing.key.trim().eq_ignore_ascii_case(key))
+            {
+                base[existing_index] = value;
+            } else {
+                base.push(value);
+            }
+        }
     }
 
     fn merge_request_variables(
-        request: &HttpRequestData,
         mut variables: HashMap<String, String>,
+        values: &[KeyValue],
     ) -> HashMap<String, String> {
-        for variable in request
-            .request_variables
-            .iter()
-            .filter(|variable| variable.enabled)
-        {
+        for variable in values.iter().filter(|variable| variable.enabled) {
             let key = variable.key.trim();
             if key.is_empty() {
                 continue;
@@ -65,33 +82,182 @@ impl ApiImpl {
         variables
     }
 
+    async fn load_folder_chain_configs(
+        workspace_path: Option<&str>,
+        file_path: Option<&str>,
+    ) -> Result<Vec<(String, FolderConfig)>, AppError> {
+        let Some(workspace_path) = workspace_path else {
+            return Ok(Vec::new());
+        };
+        let Some(file_path) = file_path else {
+            return Ok(Vec::new());
+        };
+
+        folder_config::load_folder_chain(Path::new(workspace_path), Path::new(file_path)).await
+    }
+
+    fn normalize_auth_type(value: Option<&str>) -> String {
+        match value.unwrap_or("none").to_ascii_lowercase().as_str() {
+            "inherit" => "inherit".to_string(),
+            "bearer" => "bearer".to_string(),
+            "basic" => "basic".to_string(),
+            _ => "none".to_string(),
+        }
+    }
+
+    fn select_inherited_folder_auth(chain: &[(String, FolderConfig)]) -> Option<&FolderConfig> {
+        // Walk from innermost folder outward, returning the first folder that
+        // actually configures auth (i.e. auth_type != "none"). This ensures a
+        // folder with auth_type = "none" doesn't shadow a real auth setting
+        // defined in a parent folder.
+        chain
+            .iter()
+            .rev()
+            .find(|(_, config)| config.auth_type != "none")
+            .map(|(_, config)| config)
+    }
+
+    fn resolve_auth_values(
+        request: &HttpRequestData,
+        folder_chain: &[(String, FolderConfig)],
+    ) -> (String, Option<String>, Option<String>, Option<String>) {
+        let request_auth_type = Self::normalize_auth_type(request.auth_type.as_deref());
+
+        if request_auth_type == "inherit" {
+            if let Some(config) = Self::select_inherited_folder_auth(folder_chain) {
+                let config_auth_type = Self::normalize_auth_type(Some(&config.auth_type));
+                return (
+                    config_auth_type,
+                    config.auth_bearer.clone(),
+                    config.auth_basic_username.clone(),
+                    config.auth_basic_password.clone(),
+                );
+            }
+
+            return ("none".to_string(), None, None, None);
+        }
+
+        (
+            request_auth_type,
+            request.auth_bearer.clone(),
+            request.auth_basic_username.clone(),
+            request.auth_basic_password.clone(),
+        )
+    }
+
+    fn get_authorization_header_value(
+        auth_type: &str,
+        auth_bearer: Option<&str>,
+        auth_basic_username: Option<&str>,
+        auth_basic_password: Option<&str>,
+    ) -> Option<String> {
+        if auth_type == "bearer" {
+            let token = auth_bearer.unwrap_or_default().trim();
+            if token.is_empty() {
+                return None;
+            }
+            return Some(format!("Bearer {token}"));
+        }
+
+        if auth_type == "basic" {
+            let username = auth_basic_username.unwrap_or_default();
+            let password = auth_basic_password.unwrap_or_default();
+            return Some(format!(
+                "Basic {}",
+                BASE64_STANDARD.encode(format!("{username}:{password}"))
+            ));
+        }
+
+        None
+    }
+
+    fn apply_authorization_header(headers: &mut Vec<KeyValue>, auth_value: Option<String>) {
+        if auth_value.is_none() {
+            return;
+        }
+
+        headers.retain(|header| !header.key.trim().eq_ignore_ascii_case("authorization"));
+
+        headers.push(KeyValue {
+            key: "Authorization".to_string(),
+            value: auth_value.unwrap_or_default(),
+            enabled: true,
+        });
+    }
+
+    async fn history_db(&self) -> Result<Arc<HistoryDb>, AppError> {
+        self.db.get().cloned().ok_or_else(|| {
+            AppError::RequestError("History database is not initialized".to_string())
+        })
+    }
+
     async fn resolve_with_environment(
         &self,
-        request: HttpRequestData,
+        mut request: HttpRequestData,
         environment_name: Option<String>,
         workspace_path: Option<String>,
     ) -> Result<HttpRequestData, AppError> {
+        let folder_chain = Self::load_folder_chain_configs(
+            workspace_path.as_deref(),
+            request.file_path.as_deref(),
+        )
+        .await?;
+
+        let mut merged_folder_headers = Vec::new();
+        for (_, config) in &folder_chain {
+            let headers = Self::enabled_key_values(config.headers.clone());
+            Self::merge_key_values_by_key(&mut merged_folder_headers, headers);
+        }
+        let request_headers = Self::enabled_key_values(request.headers.clone());
+        Self::merge_key_values_by_key(&mut merged_folder_headers, request_headers);
+        request.headers = merged_folder_headers;
+
+        let (resolved_auth_type, resolved_auth_bearer, resolved_auth_basic_username, resolved_auth_basic_password) =
+            Self::resolve_auth_values(&request, &folder_chain);
+        request.auth_type = Some(resolved_auth_type);
+        request.auth_bearer = resolved_auth_bearer;
+        request.auth_basic_username = resolved_auth_basic_username;
+        request.auth_basic_password = resolved_auth_basic_password;
+
+        let mut merged_variables = HashMap::new();
+
         match (workspace_path, environment_name) {
             (Some(workspace), Some(environment)) => {
                 let env = config::read_environment(Path::new(&workspace), &environment).await?;
-                let environment_variables: HashMap<String, String> = env
+                merged_variables = env
                     .variables
                     .into_iter()
                     .filter(|variable| variable.enabled)
-                    .map(|variable| (variable.key, variable.value))
+                    .filter(|variable| !variable.key.trim().is_empty())
+                    .map(|variable| (variable.key.trim().to_string(), variable.value))
                     .collect();
-                let variables = Self::merge_request_variables(&request, environment_variables);
-                resolver::resolve_request(&self.hbs, &request, &variables)
             }
-            (None, None) => {
-                let variables = Self::merge_request_variables(&request, HashMap::new());
-                resolver::resolve_request(&self.hbs, &request, &variables)
-            }
-            _ => Err(AppError::RequestError(
+            (Some(_), None) | (None, None) => {}
+            (None, Some(_)) => {
+                return Err(AppError::RequestError(
                 "Both environment_name and workspace_path are required for environment resolution"
                     .to_string(),
-            )),
+                ))
+            }
         }
+
+        for (_, config) in &folder_chain {
+            merged_variables = Self::merge_request_variables(merged_variables, &config.variables);
+        }
+
+        merged_variables = Self::merge_request_variables(merged_variables, &request.request_variables);
+
+        let mut resolved_request = resolver::resolve_request(&self.hbs, &request, &merged_variables)?;
+
+        let resolved_auth_value = Self::get_authorization_header_value(
+            &Self::normalize_auth_type(resolved_request.auth_type.as_deref()),
+            resolved_request.auth_bearer.as_deref(),
+            resolved_request.auth_basic_username.as_deref(),
+            resolved_request.auth_basic_password.as_deref(),
+        );
+        Self::apply_authorization_header(&mut resolved_request.headers, resolved_auth_value);
+
+        Ok(resolved_request)
     }
 
     fn app_handle(&self) -> Result<AppHandle<Wry>, AppError> {
@@ -243,4 +409,3 @@ fn key_values_as_pairs(values: &[KeyValue]) -> Vec<String> {
         .map(|item| format!("{}={}", item.key, item.value))
         .collect()
 }
-

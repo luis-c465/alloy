@@ -19,6 +19,7 @@ type FileTreeContextMenuProps = {
   onNewFolder: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onEditFolderProperties: () => void;
 };
 
 export function FileTreeContextMenu({
@@ -32,6 +33,7 @@ export function FileTreeContextMenu({
   onNewFolder,
   onRename,
   onDelete,
+  onEditFolderProperties,
 }: FileTreeContextMenuProps) {
   const triggerStyle: CSSProperties = position
     ? {
@@ -71,6 +73,14 @@ export function FileTreeContextMenu({
           </DropdownMenuItem>
         ) : (
           <>
+            <DropdownMenuItem
+              onSelect={() => {
+                onEditFolderProperties();
+              }}
+            >
+              Folder Properties
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={() => {
                 onNewFile();

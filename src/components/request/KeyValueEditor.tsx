@@ -18,6 +18,10 @@ interface KeyValueEditorProps {
   onChange: (items: KeyValue[]) => void;
   keyPlaceholder?: string;
   valuePlaceholder?: string;
+  inheritedItems?: Array<{
+    source: string;
+    items: KeyValue[];
+  }>;
 }
 
 const isEmptyRow = (item: KeyValue): boolean =>
@@ -41,6 +45,7 @@ export function KeyValueEditor({
   onChange,
   keyPlaceholder = "Key",
   valuePlaceholder = "Value",
+  inheritedItems = [],
 }: KeyValueEditorProps) {
   const layoutState = useDefaultLayout({
     id: "request-key-value-columns",
@@ -104,6 +109,50 @@ export function KeyValueEditor({
       </div>
 
       <div className="divide-y divide-border">
+        {inheritedItems.map((group) => (
+          <div key={group.source} className="bg-muted/20">
+            <div className="px-2 py-1 text-[11px] text-muted-foreground">
+              Inherited from {group.source}
+            </div>
+            <div className="divide-y divide-border/50">
+              {group.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="grid items-center gap-2 px-2 py-1.5 opacity-70"
+                  style={{ gridTemplateColumns: rowGridTemplate }}
+                >
+                  <div className="flex justify-center">
+                    <input
+                      type="checkbox"
+                      checked={item.enabled}
+                      aria-label="Inherited entry"
+                      className="size-3.5 rounded border-border"
+                      disabled
+                    />
+                  </div>
+
+                  <Input
+                    value={item.key}
+                    readOnly
+                    className={cn(
+                      "h-7 rounded-sm border-input/70 bg-transparent text-xs",
+                      "font-mono",
+                    )}
+                  />
+
+                  <Input
+                    value={item.value}
+                    readOnly
+                    className="h-7 rounded-sm"
+                  />
+
+                  <span className="size-3" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
         {rows.map((item) => (
           <div
             key={item.id}

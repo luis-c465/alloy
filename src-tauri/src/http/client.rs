@@ -244,6 +244,11 @@ pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedRespons
         timeout_ms,
         skip_ssl_verification,
         request_variables: _,
+        file_path: _,
+        auth_type: _,
+        auth_bearer: _,
+        auth_basic_username: _,
+        auth_basic_password: _,
     } = request;
 
     let mut url = parse_url(&raw_url)?;
@@ -560,6 +565,11 @@ mod tests {
             timeout_ms: None,
             skip_ssl_verification: false,
             request_variables: Vec::new(),
+            file_path: None,
+            auth_type: None,
+            auth_bearer: None,
+            auth_basic_username: None,
+            auth_basic_password: None,
         };
 
         let response = execute_request(request)
@@ -603,6 +613,11 @@ mod tests {
             timeout_ms: None,
             skip_ssl_verification: false,
             request_variables: Vec::new(),
+            file_path: None,
+            auth_type: None,
+            auth_bearer: None,
+            auth_basic_username: None,
+            auth_basic_password: None,
         };
 
         let response = execute_request(request)
@@ -652,6 +667,11 @@ mod tests {
             timeout_ms: None,
             skip_ssl_verification: false,
             request_variables: Vec::new(),
+            file_path: None,
+            auth_type: None,
+            auth_bearer: None,
+            auth_basic_username: None,
+            auth_basic_password: None,
         };
 
         let error = match execute_request(request).await {
@@ -676,6 +696,11 @@ mod tests {
             timeout_ms: None,
             skip_ssl_verification: false,
             request_variables: Vec::new(),
+            file_path: None,
+            auth_type: None,
+            auth_bearer: None,
+            auth_basic_username: None,
+            auth_basic_password: None,
         };
 
         let response = execute_request(request)
@@ -722,6 +747,11 @@ mod tests {
             timeout_ms: None,
             skip_ssl_verification: false,
             request_variables: Vec::new(),
+            file_path: None,
+            auth_type: None,
+            auth_bearer: None,
+            auth_basic_username: None,
+            auth_basic_password: None,
         };
 
         let response = execute_request(request)

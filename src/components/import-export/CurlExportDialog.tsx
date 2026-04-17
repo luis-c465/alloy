@@ -82,6 +82,24 @@ const buildExportRequest = (
   tab: Tab,
   environmentVariables: Map<string, string>,
 ): HttpRequestData => {
+  if (tab.tabType !== "request") {
+    return {
+      method: "GET",
+      url: "",
+      headers: [],
+      query_params: [],
+      body: "None",
+      timeout_ms: null,
+      skip_ssl_verification: false,
+      request_variables: [],
+      file_path: null,
+      auth_type: null,
+      auth_bearer: null,
+      auth_basic_username: null,
+      auth_basic_password: null,
+    };
+  }
+
   const requestVariables = getEnvironmentVariableMap(tab.variables);
   const variables = new Map([...environmentVariables, ...requestVariables]);
 
@@ -90,7 +108,7 @@ const buildExportRequest = (
       return false;
     }
 
-    if (tab.authType !== "none" && header.key.trim().toLowerCase() === "authorization") {
+    if ((tab.authType === "bearer" || tab.authType === "basic") && header.key.trim().toLowerCase() === "authorization") {
       return false;
     }
 
@@ -148,6 +166,11 @@ const buildExportRequest = (
     timeout_ms: tab.timeoutMs,
     skip_ssl_verification: tab.skipSslVerification,
     request_variables: [],
+    file_path: tab.filePath,
+    auth_type: tab.authType,
+    auth_bearer: tab.authBearer,
+    auth_basic_username: tab.authBasicUsername,
+    auth_basic_password: tab.authBasicPassword,
   };
 };
 
@@ -180,7 +203,7 @@ export function CurlExportDialog({ open, onOpenChange }: CurlExportDialogProps) 
       return;
     }
 
-    if (!activeTab) {
+    if (!activeTab || activeTab.tabType !== "request") {
       setCurlCommand("");
       setError("No active request to export.");
       return;

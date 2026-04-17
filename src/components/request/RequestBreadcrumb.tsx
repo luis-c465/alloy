@@ -1,6 +1,7 @@
 import { IconFile, IconFolder } from "@tabler/icons-react";
 import { useMemo } from "react";
 
+import { useActiveTab } from "~/hooks/useActiveTab";
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { joinPath } from "~/lib/path";
 import { cn } from "~/lib/utils";
@@ -64,17 +65,28 @@ const deriveSegments = (
 };
 
 export function RequestBreadcrumb() {
+  const activeTab = useActiveTab();
   const filePath = useActiveTabField("filePath", null);
+  const folderPath = useActiveTabField("folderPath", null);
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const revealPath = useWorkspaceStore((state) => state.revealPath);
 
   const segments = useMemo(() => {
-    if (!filePath) {
+    const targetPath = activeTab?.tabType === "folder" ? folderPath : filePath;
+    if (!targetPath) {
       return [];
     }
 
-    return deriveSegments(filePath, workspacePath);
-  }, [filePath, workspacePath]);
+    const derived = deriveSegments(targetPath, workspacePath);
+    if (activeTab?.tabType === "folder" && derived.length > 0) {
+      return derived.map((segment, index) => ({
+        ...segment,
+        isFile: index === derived.length - 1 ? false : segment.isFile,
+      }));
+    }
+
+    return derived;
+  }, [activeTab?.tabType, filePath, folderPath, workspacePath]);
 
   if (segments.length === 0) {
     return null;

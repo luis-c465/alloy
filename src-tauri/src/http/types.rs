@@ -46,6 +46,11 @@ pub struct HttpRequestData {
     pub timeout_ms: Option<u64>,
     pub skip_ssl_verification: bool,
     pub request_variables: Vec<KeyValue>,
+    pub file_path: Option<String>,
+    pub auth_type: Option<String>,
+    pub auth_bearer: Option<String>,
+    pub auth_basic_username: Option<String>,
+    pub auth_basic_password: Option<String>,
 }
 
 #[taurpc::ipc_type]
