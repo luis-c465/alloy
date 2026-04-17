@@ -1,14 +1,19 @@
 import { oneDark } from "@codemirror/theme-one-dark";
 import { javascript } from "@codemirror/lang-javascript";
+import { type Extension } from "@codemirror/state";
 import CodeMirror from "@uiw/react-codemirror";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { useRequestStore } from "~/stores/request-store";
 import { useThemeStore } from "~/stores/theme-store";
+import { buildScriptExtensions } from "~/lib/codemirror/script-extensions";
 
 type ScriptTab = "pre-request" | "post-response";
+
+// Base JavaScript extensions used immediately while the TS worker is loading.
+const baseExtensions: Extension[] = [javascript({ typescript: true })];
 
 export function ScriptsEditor() {
   const preRequestScript = useActiveTabField("preRequestScript", "");
@@ -19,13 +24,27 @@ export function ScriptsEditor() {
 
   const [activeScriptTab, setActiveScriptTab] = useState<ScriptTab>("pre-request");
 
-  const extensions = useMemo(() => [javascript()], []);
+  // Start with syntax highlighting only; TS extensions are added once the
+  // worker has initialised (happens asynchronously in the background).
+  const [preExtensions, setPreExtensions] = useState<Extension[]>(baseExtensions);
+  const [postExtensions, setPostExtensions] = useState<Extension[]>(baseExtensions);
+
+  useEffect(() => {
+    // Kick off both workers in parallel. Each resolves independently.
+    buildScriptExtensions("pre", "pre-request.ts").then((tsExts) => {
+      setPreExtensions([javascript({ typescript: true }), ...tsExts]);
+    });
+    buildScriptExtensions("post", "post-response.ts").then((tsExts) => {
+      setPostExtensions([javascript({ typescript: true }), ...tsExts]);
+    });
+  }, []);
 
   return (
     <div className="flex h-full min-h-[200px] flex-col gap-3">
       <p className="text-xs text-muted-foreground">
         {"// "}
-        Use the <code className="font-mono">alloy</code> global. e.g. <code className="font-mono">alloy.environment.set("token", "abc")</code>
+        Use the <code className="font-mono">alloy</code> global. e.g.{" "}
+        <code className="font-mono">alloy.environment.set("token", "abc")</code>
       </p>
 
       <Tabs
@@ -45,7 +64,7 @@ export function ScriptsEditor() {
           <CodeMirror
             value={preRequestScript}
             onChange={setPreRequestScript}
-            extensions={extensions}
+            extensions={preExtensions}
             minHeight="200px"
             basicSetup={{
               lineNumbers: true,
@@ -63,7 +82,7 @@ export function ScriptsEditor() {
           <CodeMirror
             value={postResponseScript}
             onChange={setPostResponseScript}
-            extensions={extensions}
+            extensions={postExtensions}
             minHeight="200px"
             basicSetup={{
               lineNumbers: true,
