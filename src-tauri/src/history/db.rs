@@ -12,6 +12,10 @@ const MAX_RESPONSE_BODY_BYTES: usize = 1024 * 1024;
 const TRUNCATED_MARKER: &str = "\n[TRUNCATED]";
 const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Number of days to retain history entries. Entries older than this are
+/// deleted automatically on startup. Change this value to adjust retention.
+pub const HISTORY_RETENTION_DAYS: u32 = 30;
+
 pub struct HistoryDb {
     pub conn: Mutex<Connection>,
 }

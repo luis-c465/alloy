@@ -15,7 +15,7 @@ use commands::{
     workspace::{WorkspaceApi, WorkspaceApiImpl},
 };
 use environment::resolver;
-use history::db::HistoryDb;
+use history::db::{HistoryDb, HISTORY_RETENTION_DAYS};
 use specta_typescript::{BigIntExportBehavior, Typescript};
 use std::sync::Arc;
 use tauri::Manager;
@@ -79,6 +79,17 @@ pub async fn run() {
             db.set(history_db.clone()).map_err(|_| {
                 std::io::Error::other("History database was initialized more than once")
             })?;
+
+            // Prune history entries older than the configured retention period.
+            let db_for_cleanup = history_db.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = db_for_cleanup
+                    .delete_older_than_days(HISTORY_RETENTION_DAYS)
+                    .await
+                {
+                    eprintln!("Failed to prune old history: {e}");
+                }
+            });
 
             app.manage(history_db);
 
