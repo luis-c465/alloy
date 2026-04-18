@@ -22,16 +22,7 @@ Alloy is a desktop HTTP API client built with Tauri, Rust, and React. It gives y
 
 ## Screenshots
 
-Replace these placeholders with real screenshots as the UI evolves.
-
-![Alloy Request Builder Placeholder](doc/images/placeholder-request-builder.svg)
-*Request builder: method selector, URL bar, tabs, and send flow.*
-
-![Alloy Response Viewer Placeholder](doc/images/placeholder-response-viewer.svg)
-*Response panel: body, headers, cookies, status, timing, and size.*
-
-![Alloy Collections Placeholder](doc/images/placeholder-collections-history.svg)
-*Sidebar with collections and request history.*
+![Alloy App](doc/images/application.png)
 
 ## Getting Started
 
@@ -120,29 +111,29 @@ alloy.console.log(`Response time: ${alloy.response.responseTime}ms`);
 
 ### `alloy` API reference
 
-| Object | Available in | Description |
-|--------|-------------|-------------|
-| `alloy.request.method` | Pre-request | HTTP method (readable/writable) |
-| `alloy.request.url` | Pre-request | Request URL (readable/writable) |
-| `alloy.request.headers` | Pre-request | Headers with `.add(key, value)` / `.remove(key)` |
-| `alloy.request.queryParams` | Pre-request | Query params with `.add(key, value)` / `.remove(key)` |
-| `alloy.request.body` | Pre-request | Raw request body string (readable/writable) |
-| `alloy.response.code` | Post-response | HTTP status code (e.g. `200`) |
-| `alloy.response.status` | Post-response | Status text (e.g. `"OK"`) |
-| `alloy.response.headers` | Post-response | Response headers object |
-| `alloy.response.text()` | Post-response | Response body as a string |
-| `alloy.response.json()` | Post-response | Response body parsed as JSON |
-| `alloy.response.responseTime` | Post-response | Elapsed time in milliseconds |
-| `alloy.response.responseSize` | Post-response | Response body size in bytes |
-| `alloy.environment.get(key)` | Both | Read a persisted environment variable |
-| `alloy.environment.set(key, value)` | Both | Write a persisted environment variable |
-| `alloy.environment.unset(key)` | Both | Remove a persisted environment variable |
-| `alloy.environment.has(key)` | Both | Check if an environment variable exists |
-| `alloy.variables.get(key)` | Both | Read a request-scoped variable |
-| `alloy.variables.set(key, value)` | Both | Write a request-scoped variable |
-| `alloy.info.eventName` | Both | `"pre-request"` or `"post-response"` |
-| `alloy.info.requestName` | Both | Name of the current request |
-| `alloy.console.log(...args)` | Both | Log output shown in the UI |
+| Object                              | Available in  | Description                                           |
+| ----------------------------------- | ------------- | ----------------------------------------------------- |
+| `alloy.request.method`              | Pre-request   | HTTP method (readable/writable)                       |
+| `alloy.request.url`                 | Pre-request   | Request URL (readable/writable)                       |
+| `alloy.request.headers`             | Pre-request   | Headers with `.add(key, value)` / `.remove(key)`      |
+| `alloy.request.queryParams`         | Pre-request   | Query params with `.add(key, value)` / `.remove(key)` |
+| `alloy.request.body`                | Pre-request   | Raw request body string (readable/writable)           |
+| `alloy.response.code`               | Post-response | HTTP status code (e.g. `200`)                         |
+| `alloy.response.status`             | Post-response | Status text (e.g. `"OK"`)                             |
+| `alloy.response.headers`            | Post-response | Response headers object                               |
+| `alloy.response.text()`             | Post-response | Response body as a string                             |
+| `alloy.response.json()`             | Post-response | Response body parsed as JSON                          |
+| `alloy.response.responseTime`       | Post-response | Elapsed time in milliseconds                          |
+| `alloy.response.responseSize`       | Post-response | Response body size in bytes                           |
+| `alloy.environment.get(key)`        | Both          | Read a persisted environment variable                 |
+| `alloy.environment.set(key, value)` | Both          | Write a persisted environment variable                |
+| `alloy.environment.unset(key)`      | Both          | Remove a persisted environment variable               |
+| `alloy.environment.has(key)`        | Both          | Check if an environment variable exists               |
+| `alloy.variables.get(key)`          | Both          | Read a request-scoped variable                        |
+| `alloy.variables.set(key, value)`   | Both          | Write a request-scoped variable                       |
+| `alloy.info.eventName`              | Both          | `"pre-request"` or `"post-response"`                  |
+| `alloy.info.requestName`            | Both          | Name of the current request                           |
+| `alloy.console.log(...args)`        | Both          | Log output shown in the UI                            |
 
 ### Storage in `.http` files
 
