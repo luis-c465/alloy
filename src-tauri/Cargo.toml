@@ -40,3 +40,13 @@ url = "2"
 boa_engine = "0.21"
 boa_gc = "0.21"
 boa_runtime = "0.21"
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+strip = "symbols"
+panic = "abort"
