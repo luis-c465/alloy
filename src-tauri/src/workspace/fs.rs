@@ -291,7 +291,6 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
 
         // /tmp/alloy-jail-xxx/../ resolves to /tmp, which is outside root.
-        let escaping = root.join("..");
         // We can't canonicalize a non-existent target, but the parent exists.
         // Instead test with the canonical /tmp dir which is outside root.
         let result = assert_within_directory(&root, &std::env::temp_dir());

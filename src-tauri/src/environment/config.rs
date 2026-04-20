@@ -172,7 +172,7 @@ async fn read_environment_file(path: &Path, name: String) -> Result<EnvironmentD
         let (var_value, enabled) = if let Some(table) = value.as_table() {
             let v = table
                 .get("value")
-                .map(|v| toml_value_to_string(v))
+                .map(toml_value_to_string)
                 .transpose()
                 .map_err(|message| {
                     AppError::ParseError(format!(

@@ -280,7 +280,7 @@ fn extract_request_scripts_and_clean_content(content: &str) -> (Vec<ScriptBlocks
 }
 
 fn finalize_active_script(
-    script_blocks: &mut Vec<ScriptBlocks>,
+    script_blocks: &mut [ScriptBlocks],
     active_script: &mut Option<ScriptBlockType>,
     active_script_lines: &mut Vec<String>,
     current_block: Option<usize>,
@@ -333,8 +333,8 @@ fn strip_script_comment_prefix(line: &str) -> String {
         content.to_string()
     } else if line.trim() == "#" {
         String::new()
-    } else if line.starts_with('#') {
-        line[1..].to_string()
+    } else if let Some(content) = line.strip_prefix('#') {
+        content.to_string()
     } else {
         String::new()
     }

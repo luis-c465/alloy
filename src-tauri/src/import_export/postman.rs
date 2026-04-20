@@ -65,7 +65,7 @@ pub struct PostmanItem {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum PostmanRequest {
-    Detailed(PostmanRequestObject),
+    Detailed(Box<PostmanRequestObject>),
     RawUrl(String),
 }
 
