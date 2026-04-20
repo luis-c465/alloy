@@ -678,6 +678,8 @@ The optimization strategy targets three layers:
 **Scope:**
 - Modify: `vite.config.ts`
 
+> **Updated by Step 12 executor:** Project is on Vite 8 with Rolldown (`build.rolldownOptions`). Implemented chunk splitting via `build.rolldownOptions.output.codeSplitting.groups` instead of Rollup `manualChunks`, which is deprecated/removed in this setup.
+
 **Sub-tasks:**
 
 1. Add `build.rollupOptions.output.manualChunks` to split vendor code:

@@ -19,10 +19,42 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   build: {
-    chunkSizeWarningLimit: 5000,
+    target: "es2022",
+    chunkSizeWarningLimit: 500,
     rolldownOptions: {
       checks: {
         pluginTimings: false,
+      },
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "vendor-react",
+              test: /node_modules[\\/]react(?:-dom)?[\\/]/,
+              priority: 50,
+            },
+            {
+              name: "vendor-codemirror",
+              test: /node_modules[\\/](?:@codemirror|@uiw[\\/]react-codemirror)[\\/]/,
+              priority: 45,
+            },
+            {
+              name: "vendor-ui",
+              test: /node_modules[\\/]radix-ui[\\/]/,
+              priority: 40,
+            },
+            {
+              name: "vendor-query",
+              test: /node_modules[\\/]@tanstack[\\/]react-query[\\/]/,
+              priority: 35,
+            },
+            {
+              name: "vendor-icons",
+              test: /node_modules[\\/]@tabler[\\/]icons-react[\\/]/,
+              priority: 30,
+            },
+          ],
+        },
       },
     },
   },
