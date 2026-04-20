@@ -246,8 +246,7 @@ impl WorkspaceApi for WorkspaceApiImpl {
         folder_path: String,
     ) -> Result<FolderConfig, AppError> {
         let workspace = validate_workspace_path_async(workspace_path).await?;
-        let folder =
-            validate_folder_path_in_workspace_async(workspace, folder_path).await?;
+        let folder = validate_folder_path_in_workspace_async(workspace, folder_path).await?;
 
         folder_config::read_folder_config(&folder).await
     }
@@ -259,8 +258,7 @@ impl WorkspaceApi for WorkspaceApiImpl {
         config: FolderConfig,
     ) -> Result<(), AppError> {
         let workspace = validate_workspace_path_async(workspace_path).await?;
-        let folder =
-            validate_folder_path_in_workspace_async(workspace, folder_path).await?;
+        let folder = validate_folder_path_in_workspace_async(workspace, folder_path).await?;
 
         folder_config::write_folder_config(&folder, &config).await
     }
@@ -271,13 +269,12 @@ impl WorkspaceApi for WorkspaceApiImpl {
     ) -> Result<Vec<FolderConfigEntry>, AppError> {
         let workspace = validate_workspace_path_async(workspace_path).await?;
         let workspace_for_scan = workspace.clone();
-        let folders = tokio::task::spawn_blocking(move || {
-            list_directories_recursive(&workspace_for_scan, 0)
-        })
-        .await
-        .map_err(|error| {
-            AppError::RequestError(format!("Failed to list workspace directories: {error}"))
-        })??;
+        let folders =
+            tokio::task::spawn_blocking(move || list_directories_recursive(&workspace_for_scan, 0))
+                .await
+                .map_err(|error| {
+                    AppError::RequestError(format!("Failed to list workspace directories: {error}"))
+                })??;
         let mut entries = Vec::new();
 
         for folder in folders {

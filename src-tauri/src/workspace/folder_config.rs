@@ -142,14 +142,15 @@ pub async fn load_folder_chain(
 ) -> Result<Vec<(String, FolderConfig)>, AppError> {
     let workspace_path_buf = workspace_path.to_path_buf();
     let file_path_buf = file_path.to_path_buf();
-    let (canonical_workspace, canonical_file) = tokio::task::spawn_blocking(
-        move || -> Result<(PathBuf, PathBuf), AppError> {
-            let canonical_workspace = std::fs::canonicalize(&workspace_path_buf).map_err(|error| {
-                AppError::IoError(format!(
-                    "Cannot resolve workspace path {}: {error}",
-                    workspace_path_buf.display()
-                ))
-            })?;
+    let (canonical_workspace, canonical_file) =
+        tokio::task::spawn_blocking(move || -> Result<(PathBuf, PathBuf), AppError> {
+            let canonical_workspace =
+                std::fs::canonicalize(&workspace_path_buf).map_err(|error| {
+                    AppError::IoError(format!(
+                        "Cannot resolve workspace path {}: {error}",
+                        workspace_path_buf.display()
+                    ))
+                })?;
             let canonical_file = std::fs::canonicalize(&file_path_buf).map_err(|error| {
                 AppError::IoError(format!(
                     "Cannot resolve file path {}: {error}",
@@ -158,12 +159,11 @@ pub async fn load_folder_chain(
             })?;
 
             Ok((canonical_workspace, canonical_file))
-        },
-    )
-    .await
-    .map_err(|error| {
-        AppError::RequestError(format!("Failed to resolve canonical paths: {error}"))
-    })??;
+        })
+        .await
+        .map_err(|error| {
+            AppError::RequestError(format!("Failed to resolve canonical paths: {error}"))
+        })??;
 
     if !canonical_file.starts_with(&canonical_workspace) {
         return Err(AppError::IoError(format!(
