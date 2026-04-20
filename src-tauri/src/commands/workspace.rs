@@ -111,7 +111,7 @@ impl WorkspaceApi for WorkspaceApiImpl {
     }
 
     async fn list_files(self, workspace_path: String) -> Result<Vec<FileEntry>, AppError> {
-        let workspace = validate_workspace_path(&workspace_path)?;
+        let workspace = validate_workspace_path_async(workspace_path).await?;
         fs::list_directory(&workspace).await
     }
 
@@ -235,7 +235,7 @@ impl WorkspaceApi for WorkspaceApiImpl {
     }
 
     async fn ensure_workspace(self, workspace_path: String) -> Result<(), AppError> {
-        let workspace = validate_workspace_path(&workspace_path)?;
+        let workspace = validate_workspace_path_async(workspace_path).await?;
         fs::ensure_alloy_dir(&workspace).await?;
         Ok(())
     }
@@ -245,8 +245,9 @@ impl WorkspaceApi for WorkspaceApiImpl {
         workspace_path: String,
         folder_path: String,
     ) -> Result<FolderConfig, AppError> {
-        let workspace = validate_workspace_path(&workspace_path)?;
-        let folder = validate_folder_path_in_workspace(&workspace, &folder_path)?;
+        let workspace = validate_workspace_path_async(workspace_path).await?;
+        let folder =
+            validate_folder_path_in_workspace_async(workspace, folder_path).await?;
 
         folder_config::read_folder_config(&folder).await
     }
@@ -257,8 +258,9 @@ impl WorkspaceApi for WorkspaceApiImpl {
         folder_path: String,
         config: FolderConfig,
     ) -> Result<(), AppError> {
-        let workspace = validate_workspace_path(&workspace_path)?;
-        let folder = validate_folder_path_in_workspace(&workspace, &folder_path)?;
+        let workspace = validate_workspace_path_async(workspace_path).await?;
+        let folder =
+            validate_folder_path_in_workspace_async(workspace, folder_path).await?;
 
         folder_config::write_folder_config(&folder, &config).await
     }
@@ -267,8 +269,15 @@ impl WorkspaceApi for WorkspaceApiImpl {
         self,
         workspace_path: String,
     ) -> Result<Vec<FolderConfigEntry>, AppError> {
-        let workspace = validate_workspace_path(&workspace_path)?;
-        let folders = list_directories_recursive(&workspace, 0)?;
+        let workspace = validate_workspace_path_async(workspace_path).await?;
+        let workspace_for_scan = workspace.clone();
+        let folders = tokio::task::spawn_blocking(move || {
+            list_directories_recursive(&workspace_for_scan, 0)
+        })
+        .await
+        .map_err(|error| {
+            AppError::RequestError(format!("Failed to list workspace directories: {error}"))
+        })??;
         let mut entries = Vec::new();
 
         for folder in folders {
@@ -327,6 +336,14 @@ fn list_directories_recursive(path: &Path, depth: usize) -> Result<Vec<PathBuf>,
     Ok(results)
 }
 
+async fn validate_workspace_path_async(workspace_path: String) -> Result<PathBuf, AppError> {
+    tokio::task::spawn_blocking(move || validate_workspace_path(&workspace_path))
+        .await
+        .map_err(|error| {
+            AppError::RequestError(format!("Failed to validate workspace path: {error}"))
+        })?
+}
+
 fn validate_workspace_path(workspace_path: &str) -> Result<PathBuf, AppError> {
     let path = PathBuf::from(workspace_path);
     if !path.exists() {
@@ -350,6 +367,17 @@ fn validate_workspace_path(workspace_path: &str) -> Result<PathBuf, AppError> {
             path.display()
         ))
     })
+}
+
+async fn validate_folder_path_in_workspace_async(
+    workspace: PathBuf,
+    folder_path: String,
+) -> Result<PathBuf, AppError> {
+    tokio::task::spawn_blocking(move || validate_folder_path_in_workspace(&workspace, &folder_path))
+        .await
+        .map_err(|error| {
+            AppError::RequestError(format!("Failed to validate folder path: {error}"))
+        })?
 }
 
 fn validate_folder_path_in_workspace(

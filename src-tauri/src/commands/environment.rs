@@ -63,7 +63,7 @@ impl EnvironmentApiImpl {
 #[taurpc::resolvers]
 impl EnvironmentApi for EnvironmentApiImpl {
     async fn list_environments(self, workspace_path: String) -> Result<EnvironmentList, AppError> {
-        let workspace = validate_workspace_path(&workspace_path)?;
+        let workspace = validate_workspace_path_async(workspace_path).await?;
         let environments = config::list_environments(&workspace).await?;
         let active = config::read_active_environment(&workspace).await?;
 
@@ -78,7 +78,7 @@ impl EnvironmentApi for EnvironmentApiImpl {
         workspace_path: String,
         name: String,
     ) -> Result<EnvironmentData, AppError> {
-        let workspace = validate_workspace_path(&workspace_path)?;
+        let workspace = validate_workspace_path_async(workspace_path).await?;
         config::read_environment(&workspace, &name).await
     }
 
@@ -87,7 +87,7 @@ impl EnvironmentApi for EnvironmentApiImpl {
         workspace_path: String,
         env: EnvironmentData,
     ) -> Result<(), AppError> {
-        let workspace = validate_workspace_path(&workspace_path)?;
+        let workspace = validate_workspace_path_async(workspace_path).await?;
         config::write_environment(&workspace, &env).await
     }
 
@@ -96,7 +96,7 @@ impl EnvironmentApi for EnvironmentApiImpl {
         workspace_path: String,
         name: String,
     ) -> Result<(), AppError> {
-        let workspace = validate_workspace_path(&workspace_path)?;
+        let workspace = validate_workspace_path_async(workspace_path).await?;
         config::delete_environment(&workspace, &name).await
     }
 
@@ -105,7 +105,7 @@ impl EnvironmentApi for EnvironmentApiImpl {
         workspace_path: String,
         name: Option<String>,
     ) -> Result<(), AppError> {
-        let workspace = validate_workspace_path(&workspace_path)?;
+        let workspace = validate_workspace_path_async(workspace_path).await?;
         config::write_active_environment(&workspace, name.as_deref()).await
     }
 
@@ -117,7 +117,7 @@ impl EnvironmentApi for EnvironmentApiImpl {
         request_variables: Vec<KeyValue>,
     ) -> Result<String, AppError> {
         let variables = if let Some(env_name) = env_name {
-            let workspace = validate_workspace_path(&workspace_path)?;
+            let workspace = validate_workspace_path_async(workspace_path).await?;
             let env = config::read_environment(&workspace, &env_name).await?;
             env.variables
                 .into_iter()
@@ -131,6 +131,16 @@ impl EnvironmentApi for EnvironmentApiImpl {
 
         resolve_template(&self.hbs, &url, &variables)
     }
+}
+
+async fn validate_workspace_path_async(
+    workspace_path: String,
+) -> Result<std::path::PathBuf, AppError> {
+    tokio::task::spawn_blocking(move || validate_workspace_path(&workspace_path))
+        .await
+        .map_err(|error| {
+            AppError::RequestError(format!("Failed to validate workspace path: {error}"))
+        })?
 }
 
 fn validate_workspace_path(workspace_path: &str) -> Result<std::path::PathBuf, AppError> {
