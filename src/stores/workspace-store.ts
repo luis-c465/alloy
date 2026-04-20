@@ -62,7 +62,28 @@ const getWorkspaceName = (path: string): string => {
   return segments[segments.length - 1] ?? path;
 };
 
-const normalizePath = (path: string): string => path.replace(/\\/g, "/").replace(/\/+$/, "");
+const normalizePath = (path: string): string => path
+  .replace(/\\/g, "/")
+  .replace(/^\/\/(?:\?|\.)\//, "")
+  .replace(/\/+$/, "");
+
+const isWindowsStylePath = (path: string): boolean => /^[a-z]:\//i.test(path) || path.startsWith("//");
+
+const pathsEqual = (left: string, right: string): boolean => {
+  if (isWindowsStylePath(left) || isWindowsStylePath(right)) {
+    return left.toLowerCase() === right.toLowerCase();
+  }
+
+  return left === right;
+};
+
+const startsWithPathPrefix = (path: string, prefix: string): boolean => {
+  if (isWindowsStylePath(path) || isWindowsStylePath(prefix)) {
+    return path.toLowerCase().startsWith(prefix.toLowerCase());
+  }
+
+  return path.startsWith(prefix);
+};
 
 const getPathSeparator = (path: string): string => (
   path.includes("\\") && !path.includes("/") ? "\\" : "/"
@@ -101,12 +122,12 @@ const getRelativeSegments = (
   }
 
   const normalizedWorkspace = normalizePath(workspacePath);
-  if (normalizedTarget === normalizedWorkspace) {
+  if (pathsEqual(normalizedTarget, normalizedWorkspace)) {
     return [];
   }
 
   const workspacePrefix = `${normalizedWorkspace}/`;
-  if (normalizedTarget.startsWith(workspacePrefix)) {
+  if (startsWithPathPrefix(normalizedTarget, workspacePrefix)) {
     return normalizedTarget.slice(workspacePrefix.length).split("/").filter(Boolean);
   }
 

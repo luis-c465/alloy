@@ -21,7 +21,20 @@ type Segment = {
   isFile: boolean;
 };
 
-const normalizePath = (path: string): string => path.replace(/\\/g, "/").replace(/\/+$/, "");
+const normalizePath = (path: string): string => path
+  .replace(/\\/g, "/")
+  .replace(/^\/\/(?:\?|\.)\//, "")
+  .replace(/\/+$/, "");
+
+const isWindowsStylePath = (path: string): boolean => /^[a-z]:\//i.test(path) || path.startsWith("//");
+
+const startsWithPathPrefix = (path: string, prefix: string): boolean => {
+  if (isWindowsStylePath(path) || isWindowsStylePath(prefix)) {
+    return path.toLowerCase().startsWith(prefix.toLowerCase());
+  }
+
+  return path.startsWith(prefix);
+};
 
 const deriveSegments = (
   filePath: string,
@@ -29,9 +42,10 @@ const deriveSegments = (
 ): Segment[] => {
   const normalizedFilePath = normalizePath(filePath);
   const normalizedWorkspacePath = workspacePath ? normalizePath(workspacePath) : null;
+  const workspacePrefix = normalizedWorkspacePath ? `${normalizedWorkspacePath}/` : null;
   const relativePath =
-    normalizedWorkspacePath && normalizedFilePath.startsWith(`${normalizedWorkspacePath}/`)
-      ? normalizedFilePath.slice(normalizedWorkspacePath.length + 1)
+    workspacePrefix && startsWithPathPrefix(normalizedFilePath, workspacePrefix)
+      ? normalizedFilePath.slice(workspacePrefix.length)
       : normalizedFilePath;
 
   const labels = relativePath.split("/").filter(Boolean);

@@ -358,12 +358,14 @@ fn validate_workspace_path(workspace_path: &str) -> Result<PathBuf, AppError> {
     }
 
     // Canonicalize to resolve symlinks and '..' segments.
-    std::fs::canonicalize(&path).map_err(|error| {
+    let canonical = std::fs::canonicalize(&path).map_err(|error| {
         AppError::IoError(format!(
             "Cannot resolve workspace path {}: {error}",
             path.display()
         ))
-    })
+    })?;
+
+    Ok(fs::normalize_canonical_path(canonical))
 }
 
 async fn validate_folder_path_in_workspace_async(

@@ -8,6 +8,23 @@ use crate::{
 
 const MAX_DEPTH: usize = 10;
 
+pub fn normalize_canonical_path(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let path_str = path.to_string_lossy();
+
+        if let Some(stripped) = path_str.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{stripped}"));
+        }
+
+        if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+            return PathBuf::from(stripped);
+        }
+    }
+
+    path
+}
+
 /// Verify that `target` is contained within `root` after resolving symlinks
 /// and `..` segments.  Returns the canonicalized target path on success.
 ///
@@ -15,16 +32,16 @@ const MAX_DEPTH: usize = 10;
 /// existing ancestor (typically the parent directory) instead.
 #[allow(dead_code)]
 pub fn assert_within_directory(root: &Path, target: &Path) -> Result<PathBuf, AppError> {
-    let canonical_root = std::fs::canonicalize(root).map_err(|error| {
+    let canonical_root = normalize_canonical_path(std::fs::canonicalize(root).map_err(|error| {
         AppError::IoError(format!(
             "Cannot resolve workspace root {}: {error}",
             root.display()
         ))
-    })?;
+    })?);
 
-    let canonical_target = std::fs::canonicalize(target).map_err(|error| {
+    let canonical_target = normalize_canonical_path(std::fs::canonicalize(target).map_err(|error| {
         AppError::IoError(format!("Cannot resolve path {}: {error}", target.display()))
-    })?;
+    })?);
 
     if !canonical_target.starts_with(&canonical_root) {
         return Err(AppError::IoError(format!(
