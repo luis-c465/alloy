@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { IconSearch, IconTrash } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -189,6 +190,7 @@ export function HistoryPanel() {
   const [methodFilter, setMethodFilter] = useState<string | null>(null);
   const [limit, setLimit] = useState(HISTORY_PAGE_SIZE);
   const previousInFlightRef = useRef(false);
+  const scrollParentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -242,6 +244,14 @@ export function HistoryPanel() {
 
   const entries = historyQuery.data ?? [];
   const hasMore = entries.length >= limit;
+
+  const historyVirtualizer = useVirtualizer({
+    count: entries.length,
+    getScrollElement: () => scrollParentRef.current,
+    estimateSize: () => 60,
+    overscan: 8,
+    getItemKey: (index) => entries[index]?.id ?? index,
+  });
 
   const handleOpen = async (id: number) => {
     const entry = await getHistoryEntry(id);
@@ -304,6 +314,7 @@ export function HistoryPanel() {
       </div>
 
       <div
+        ref={scrollParentRef}
         className="min-h-0 flex-1 overflow-y-auto p-2"
         onScroll={(event) => {
           if (historyQuery.isFetching || !hasMore) {
@@ -333,20 +344,40 @@ export function HistoryPanel() {
           <div className="p-2 text-xs text-muted-foreground">No history yet.</div>
         ) : null}
 
-        <div className="space-y-1">
-          {entries.map((entry) => (
-            <HistoryListItem
-              key={entry.id}
-              entry={entry}
-              onOpen={(id) => {
-                void handleOpen(id);
-              }}
-              onDelete={(id) => {
-                void handleDelete(id);
-              }}
-            />
-          ))}
-        </div>
+        {entries.length > 0 ? (
+          <div
+            style={{
+              height: `${historyVirtualizer.getTotalSize()}px`,
+              width: "100%",
+              position: "relative",
+            }}
+          >
+            {historyVirtualizer.getVirtualItems().map((virtualItem) => {
+              const entry = entries[virtualItem.index];
+              if (!entry) {
+                return null;
+              }
+
+              return (
+                <div
+                  key={virtualItem.key}
+                  className="absolute top-0 left-0 w-full pb-1"
+                  style={{ transform: `translateY(${virtualItem.start}px)` }}
+                >
+                  <HistoryListItem
+                    entry={entry}
+                    onOpen={(id) => {
+                      void handleOpen(id);
+                    }}
+                    onDelete={(id) => {
+                      void handleDelete(id);
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
 
         {historyQuery.isFetching && !historyQuery.isLoading ? (
           <div className="p-2 text-xs text-muted-foreground">Loading more…</div>
