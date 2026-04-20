@@ -1,5 +1,5 @@
 import { IconEye, IconEyeOff } from "@tabler/icons-react";
-import { useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -44,7 +44,7 @@ const EMPTY_ENV_VARIABLES: EnvironmentKeyValue[] = [];
 const EMPTY_HEADERS: KeyValue[] = [];
 const EMPTY_REQUEST_VARIABLES: KeyValue[] = [];
 
-export function AuthEditor({ authScope = "request" }: AuthEditorProps) {
+export const AuthEditor = memo(function AuthEditor({ authScope = "request" }: AuthEditorProps) {
   const tabType = useActiveTabField("tabType", "request");
   const filePath = useActiveTabField("filePath", null);
   const authTypeField = useActiveTabField("authType", "inherit");
@@ -152,41 +152,49 @@ export function AuthEditor({ authScope = "request" }: AuthEditorProps) {
 
   const authOptions = authScope === "folder" ? FOLDER_AUTH_TYPE_OPTIONS : REQUEST_AUTH_TYPE_OPTIONS;
 
-  const setAuthTypeForScope = (value: string) => {
+  const setAuthTypeForScope = useCallback((value: string) => {
     if (authScope === "folder") {
       setFolderAuthType(value as FolderAuthType);
       return;
     }
 
     setAuthType(value as AuthType);
-  };
+  }, [authScope, setAuthType, setFolderAuthType]);
 
-  const setAuthBearerForScope = (value: string) => {
+  const setAuthBearerForScope = useCallback((value: string) => {
     if (authScope === "folder") {
       setFolderAuthBearer(value);
       return;
     }
 
     setAuthBearer(value);
-  };
+  }, [authScope, setAuthBearer, setFolderAuthBearer]);
 
-  const setAuthUsernameForScope = (value: string) => {
+  const setAuthUsernameForScope = useCallback((value: string) => {
     if (authScope === "folder") {
       setFolderAuthBasicUsername(value);
       return;
     }
 
     setAuthBasicUsername(value);
-  };
+  }, [
+    authScope,
+    setAuthBasicUsername,
+    setFolderAuthBasicUsername,
+  ]);
 
-  const setAuthPasswordForScope = (value: string) => {
+  const setAuthPasswordForScope = useCallback((value: string) => {
     if (authScope === "folder") {
       setFolderAuthBasicPassword(value);
       return;
     }
 
     setAuthBasicPassword(value);
-  };
+  }, [
+    authScope,
+    setAuthBasicPassword,
+    setFolderAuthBasicPassword,
+  ]);
 
   return (
     <div className="flex h-full min-h-[100px] flex-col gap-3 overflow-auto">
@@ -350,4 +358,4 @@ export function AuthEditor({ authScope = "request" }: AuthEditorProps) {
       </div>
     </div>
   );
-}
+});

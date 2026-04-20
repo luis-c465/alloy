@@ -2,7 +2,7 @@ import { oneDark } from "@codemirror/theme-one-dark"
 import { EditorState } from "@codemirror/state"
 import { EditorView, keymap } from "@codemirror/view"
 import CodeMirror, { type Extension } from "@uiw/react-codemirror"
-import { useMemo } from "react"
+import { useMemo, useRef } from "react"
 
 import { useEnvironmentVariables } from "~/hooks/useEnvironmentVariables"
 import { variableExtension } from "~/lib/codemirror/variable-extensions"
@@ -30,6 +30,8 @@ export function VariableInput({
 }: VariableInputProps) {
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme)
   const variables = useEnvironmentVariables()
+  const onEnterRef = useRef(onEnter)
+  onEnterRef.current = onEnter
 
   const extensions = useMemo<Extension[]>(() => {
     return [
@@ -75,7 +77,7 @@ export function VariableInput({
         {
           key: "Enter",
           run: () => {
-            onEnter?.()
+            onEnterRef.current?.()
             return true
           },
         },
@@ -96,7 +98,7 @@ export function VariableInput({
           ]
         : []),
     ]
-  }, [variables, onEnter, singleLine])
+  }, [variables, singleLine])
 
   return (
     <div

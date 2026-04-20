@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { KeyValueEditor } from "~/components/request/KeyValueEditor";
 import type { KeyValue } from "~/stores/request-store";
 import { useActiveTabField } from "~/hooks/useActiveTab";
@@ -7,7 +7,7 @@ import { useRequestStore } from "~/stores/request-store";
 
 const EMPTY_HEADERS: KeyValue[] = [];
 
-export function HeadersEditor() {
+export const HeadersEditor = memo(function HeadersEditor() {
   const tabType = useActiveTabField("tabType", "request");
   const filePath = useActiveTabField("filePath", null);
   const headers = useActiveTabField("headers", EMPTY_HEADERS);
@@ -46,4 +46,4 @@ export function HeadersEditor() {
       inheritedItems={inheritedItems}
     />
   );
-}
+});

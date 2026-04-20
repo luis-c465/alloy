@@ -1,7 +1,7 @@
 import { json } from "@codemirror/lang-json";
 import { html } from "@codemirror/lang-html";
 import { xml } from "@codemirror/lang-xml";
-import { useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 
 import { KeyValueEditor } from "~/components/request/KeyValueEditor";
 import { MultipartEditor } from "~/components/request/MultipartEditor";
@@ -34,7 +34,7 @@ const RAW_TYPE_OPTIONS = [
   { value: "application/javascript", label: "JavaScript" },
 ] as const;
 
-export function BodyEditor() {
+export const BodyEditor = memo(function BodyEditor() {
   const bodyType = useActiveTabField("bodyType", "none");
   const bodyContent = useActiveTabField("bodyContent", "");
   const bodyFormData = useActiveTabField("bodyFormData", []);
@@ -152,4 +152,4 @@ export function BodyEditor() {
       ) : null}
     </div>
   );
-}
+});

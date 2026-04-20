@@ -1,4 +1,5 @@
 import CodeMirror, { type Extension } from "@uiw/react-codemirror";
+import { memo, useCallback, useMemo, useRef } from "react";
 
 import { cn } from "~/lib/utils";
 import { getEditorThemeExtension } from "~/lib/codemirror/editor-themes";
@@ -15,7 +16,7 @@ interface CodeEditorProps {
   autocompletion?: boolean;
 }
 
-export function CodeEditor({
+export const CodeEditor = memo(function CodeEditor({
   value,
   onChange,
   extensions,
@@ -32,15 +33,24 @@ export function CodeEditor({
   const themeExtension = resolvedTheme === "dark"
     ? getEditorThemeExtension(editorThemeDark)
     : getEditorThemeExtension(editorThemeLight);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const resolvedExtensions = useMemo(
+    () => [themeExtension, ...(extensions ?? [])],
+    [extensions, themeExtension],
+  );
+
+  const handleChange = useCallback((nextValue: string) => {
+    onChangeRef.current?.(nextValue);
+  }, []);
 
   return (
     <div className={cn("rounded-md border border-border", className)}>
       <CodeMirror
         value={value}
-        onChange={(nextValue) => {
-          onChange?.(nextValue);
-        }}
-        extensions={[themeExtension, ...(extensions ?? [])]}
+        onChange={handleChange}
+        extensions={resolvedExtensions}
         editable={editable}
         readOnly={readOnly}
         height="100%"
@@ -54,4 +64,4 @@ export function CodeEditor({
       />
     </div>
   );
-}
+});

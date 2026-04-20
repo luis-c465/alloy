@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { IconX } from "@tabler/icons-react";
 import { useDefaultLayout } from "react-resizable-panels";
 
@@ -40,7 +40,7 @@ const ensureTrailingEmptyRow = (items: KeyValue[]): KeyValue[] => {
   return items;
 };
 
-export function KeyValueEditor({
+export const KeyValueEditor = memo(function KeyValueEditor({
   items,
   onChange,
   keyPlaceholder = "Key",
@@ -206,4 +206,4 @@ export function KeyValueEditor({
       </div>
     </div>
   );
-}
+});

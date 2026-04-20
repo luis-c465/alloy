@@ -1,9 +1,9 @@
-import { useCallback } from "react";
+import { memo, useCallback } from "react";
 import { KeyValueEditor } from "~/components/request/KeyValueEditor";
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { useRequestStore } from "~/stores/request-store";
 
-export function ParamsEditor() {
+export const ParamsEditor = memo(function ParamsEditor() {
   const queryParams = useActiveTabField("queryParams", []);
   const setQueryParams = useRequestStore((state) => state.setQueryParams);
   const syncQueryParamsToUrl = useRequestStore(
@@ -23,4 +23,4 @@ export function ParamsEditor() {
       valuePlaceholder="Value"
     />
   );
-}
+});
