@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   Panel,
@@ -11,9 +11,6 @@ import { Sidebar } from "~/components/layout/Sidebar";
 import { ShortcutPalette } from "~/components/layout/ShortcutPalette";
 import { TabBar } from "~/components/layout/TabBar";
 import { Toolbar } from "~/components/layout/Toolbar";
-import { CurlExportDialog } from "~/components/import-export/CurlExportDialog";
-import { CurlImportDialog } from "~/components/import-export/CurlImportDialog";
-import { PostmanImportDialog } from "~/components/import-export/PostmanImportDialog";
 import { RequestPanel } from "~/components/request/RequestPanel";
 import { ResponsePanel } from "~/components/response/ResponsePanel";
 import { Button } from "~/components/ui/button";
@@ -64,6 +61,13 @@ type TabLimitPromptState = {
   selectedTabId: string | null;
   resolve: (selectedTabId: string | null) => void;
 } | null;
+
+const CurlImportDialog = lazy(() => import("~/components/import-export/CurlImportDialog")
+  .then((module) => ({ default: module.CurlImportDialog })));
+const CurlExportDialog = lazy(() => import("~/components/import-export/CurlExportDialog")
+  .then((module) => ({ default: module.CurlExportDialog })));
+const PostmanImportDialog = lazy(() => import("~/components/import-export/PostmanImportDialog")
+  .then((module) => ({ default: module.PostmanImportDialog })));
 
 export default function App() {
   const sidebarPanelRef = usePanelRef();
@@ -465,12 +469,14 @@ export default function App() {
         }}
       />
 
-      <CurlImportDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen} />
-      <CurlExportDialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen} />
-      <PostmanImportDialog
-        open={isPostmanImportDialogOpen}
-        onOpenChange={setIsPostmanImportDialogOpen}
-      />
+      <Suspense fallback={null}>
+        <CurlImportDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen} />
+        <CurlExportDialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen} />
+        <PostmanImportDialog
+          open={isPostmanImportDialogOpen}
+          onOpenChange={setIsPostmanImportDialogOpen}
+        />
+      </Suspense>
 
       <Dialog
         open={saveAsState !== null}

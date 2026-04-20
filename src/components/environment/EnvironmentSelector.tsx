@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 
-import { EnvironmentEditor } from "~/components/environment/EnvironmentEditor";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -13,6 +12,9 @@ import {
 import { useEnvironments } from "~/hooks/useEnvironments";
 import { setActiveEnvironment as setActiveEnvironmentApi } from "~/lib/api";
 import { useWorkspaceStore } from "~/stores/workspace-store";
+
+const EnvironmentEditor = lazy(() => import("~/components/environment/EnvironmentEditor")
+  .then((module) => ({ default: module.EnvironmentEditor })));
 
 export function EnvironmentSelector() {
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
@@ -99,15 +101,17 @@ export function EnvironmentSelector() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <EnvironmentEditor
-        open={editorOpen}
-        onOpenChange={(open) => {
-          setEditorOpen(open);
-          if (!open) {
-            void environmentsQuery.refetch();
-          }
-        }}
-      />
+      <Suspense fallback={null}>
+        <EnvironmentEditor
+          open={editorOpen}
+          onOpenChange={(open) => {
+            setEditorOpen(open);
+            if (!open) {
+              void environmentsQuery.refetch();
+            }
+          }}
+        />
+      </Suspense>
     </>
   );
 }

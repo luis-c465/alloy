@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import {
   IconChevronDown,
   IconFolder,
@@ -9,7 +9,6 @@ import {
 } from "@tabler/icons-react";
 
 import { EnvironmentSelector } from "~/components/environment/EnvironmentSelector";
-import { SettingsDialog } from "~/components/layout/SettingsDialog";
 import { ThemeToggle } from "~/components/layout/ThemeToggle";
 import { OpenWorkspaceDialog } from "~/components/workspace/OpenWorkspaceDialog";
 import { Button } from "~/components/ui/button";
@@ -22,6 +21,9 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { useActiveTab } from "~/hooks/useActiveTab";
 import { useWorkspaceStore } from "~/stores/workspace-store";
+
+const SettingsDialog = lazy(() => import("~/components/layout/SettingsDialog")
+  .then((module) => ({ default: module.SettingsDialog })));
 
 type ToolbarProps = {
   workspaceName?: string | null;
@@ -161,7 +163,9 @@ export function Toolbar({
         </div>
       </header>
 
-      <SettingsDialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
+      <Suspense fallback={null}>
+        <SettingsDialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
+      </Suspense>
     </>
   );
 }
