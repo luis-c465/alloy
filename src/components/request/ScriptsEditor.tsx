@@ -1,7 +1,7 @@
 import { javascript } from "@codemirror/lang-javascript";
 import { type Extension } from "@codemirror/state";
 import CodeMirror from "@uiw/react-codemirror";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useActiveTabField } from "~/hooks/useActiveTab";
@@ -34,6 +34,15 @@ export function ScriptsEditor() {
   // worker has initialised (happens asynchronously in the background).
   const [preExtensions, setPreExtensions] = useState<Extension[]>(baseExtensions);
   const [postExtensions, setPostExtensions] = useState<Extension[]>(baseExtensions);
+
+  const preEditorExtensions = useMemo(
+    () => [themeExtension, ...preExtensions],
+    [themeExtension, preExtensions],
+  );
+  const postEditorExtensions = useMemo(
+    () => [themeExtension, ...postExtensions],
+    [themeExtension, postExtensions],
+  );
 
   useEffect(() => {
     // Kick off both workers in parallel. Each resolves independently.
@@ -70,7 +79,7 @@ export function ScriptsEditor() {
           <CodeMirror
             value={preRequestScript}
             onChange={setPreRequestScript}
-            extensions={[themeExtension, ...preExtensions]}
+            extensions={preEditorExtensions}
             minHeight="200px"
             basicSetup={{
               lineNumbers: true,
@@ -88,7 +97,7 @@ export function ScriptsEditor() {
           <CodeMirror
             value={postResponseScript}
             onChange={setPostResponseScript}
-            extensions={[themeExtension, ...postExtensions]}
+            extensions={postEditorExtensions}
             minHeight="200px"
             basicSetup={{
               lineNumbers: true,

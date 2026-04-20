@@ -2,7 +2,7 @@ import { oneDark } from "@codemirror/theme-one-dark"
 import { EditorState } from "@codemirror/state"
 import { EditorView, keymap } from "@codemirror/view"
 import CodeMirror, { type Extension } from "@uiw/react-codemirror"
-import { useMemo, useRef } from "react"
+import { memo, useCallback, useMemo, useRef } from "react"
 
 import { useEnvironmentVariables } from "~/hooks/useEnvironmentVariables"
 import { variableExtension } from "~/lib/codemirror/variable-extensions"
@@ -19,7 +19,7 @@ interface VariableInputProps {
   singleLine?: boolean
 }
 
-export function VariableInput({
+export const VariableInput = memo(function VariableInput({
   value,
   onChange,
   onEnter,
@@ -32,6 +32,13 @@ export function VariableInput({
   const variables = useEnvironmentVariables()
   const onEnterRef = useRef(onEnter)
   onEnterRef.current = onEnter
+
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+
+  const handleChange = useCallback((nextValue: string) => {
+    onChangeRef.current?.(nextValue)
+  }, [])
 
   const extensions = useMemo<Extension[]>(() => {
     return [
@@ -110,7 +117,7 @@ export function VariableInput({
     >
       <CodeMirror
         value={value}
-        onChange={onChange}
+        onChange={handleChange}
         placeholder={placeholder}
         readOnly={readOnly}
         editable={readOnly ? false : true}
@@ -136,4 +143,4 @@ export function VariableInput({
       />
     </div>
   )
-}
+})

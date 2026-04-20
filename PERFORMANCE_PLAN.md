@@ -737,6 +737,9 @@ The optimization strategy targets three layers:
 - Modify: `src/components/ui/CodeEditor.tsx`
 - Modify: `src/components/ui/VariableInput.tsx`
 - Modify: `src/lib/codemirror/script-extensions.ts` (worker loading)
+- Modify: `src/components/request/ScriptsEditor.tsx`
+
+> **Updated by Step 13 executor:** Added `ScriptsEditor.tsx` to scope because Sub-task 4 requires stabilizing all `extensions` arrays passed to CodeMirror, and this file had inline array literals that recreated on every render.
 
 **Sub-tasks:**
 
