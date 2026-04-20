@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::RwLock};
 
 use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext};
 
@@ -51,16 +51,38 @@ pub fn create_resolver() -> Handlebars<'static> {
 }
 
 pub fn resolve_template(
-    hbs: &Handlebars,
+    hbs: &RwLock<Handlebars<'static>>,
     template: &str,
     variables: &HashMap<String, String>,
 ) -> Result<String, AppError> {
-    hbs.render_template(template, variables)
+    {
+        let hbs = hbs.read().map_err(|error| {
+            AppError::RequestError(format!("Template cache lock failed: {error}"))
+        })?;
+        if hbs.has_template(template) {
+            return hbs.render(template, variables).map_err(|error| {
+                AppError::ParseError(format!("Template resolution failed: {error}"))
+            });
+        }
+    }
+
+    let mut hbs = hbs
+        .write()
+        .map_err(|error| AppError::RequestError(format!("Template cache lock failed: {error}")))?;
+
+    if !hbs.has_template(template) {
+        hbs.register_template_string(template, template)
+            .map_err(|error| {
+                AppError::ParseError(format!("Template resolution failed: {error}"))
+            })?;
+    }
+
+    hbs.render(template, variables)
         .map_err(|error| AppError::ParseError(format!("Template resolution failed: {error}")))
 }
 
 pub fn resolve_request(
-    hbs: &Handlebars,
+    hbs: &RwLock<Handlebars<'static>>,
     request: &HttpRequestData,
     variables: &HashMap<String, String>,
 ) -> Result<HttpRequestData, AppError> {
@@ -119,7 +141,7 @@ pub fn resolve_request(
 }
 
 fn resolve_multipart_fields(
-    hbs: &Handlebars,
+    hbs: &RwLock<Handlebars<'static>>,
     fields: &[MultipartField],
     variables: &HashMap<String, String>,
 ) -> Result<Vec<MultipartField>, AppError> {
@@ -145,7 +167,7 @@ fn resolve_multipart_fields(
 }
 
 fn resolve_key_values(
-    hbs: &Handlebars,
+    hbs: &RwLock<Handlebars<'static>>,
     values: &[KeyValue],
     variables: &HashMap<String, String>,
 ) -> Result<Vec<KeyValue>, AppError> {
@@ -167,7 +189,7 @@ mod tests {
 
     #[test]
     fn resolve_template_substitutes_variables() {
-        let hbs = create_resolver();
+        let hbs = RwLock::new(create_resolver());
         let variables = HashMap::from([
             ("host".to_string(), "localhost".to_string()),
             ("path".to_string(), "api".to_string()),
@@ -179,7 +201,7 @@ mod tests {
 
     #[test]
     fn resolve_template_preserves_undefined_variable() {
-        let hbs = create_resolver();
+        let hbs = RwLock::new(create_resolver());
         let variables = HashMap::from([("host".to_string(), "localhost".to_string())]);
 
         let resolved = resolve_template(&hbs, "{{host}}/{{undefined}}", &variables).unwrap();
@@ -188,7 +210,7 @@ mod tests {
 
     #[test]
     fn resolve_request_resolves_url_headers_query_and_body() {
-        let hbs = create_resolver();
+        let hbs = RwLock::new(create_resolver());
         let variables = HashMap::from([
             ("method".to_string(), "POST".to_string()),
             ("host".to_string(), "localhost:3000".to_string()),
@@ -240,7 +262,7 @@ mod tests {
 
     #[test]
     fn resolve_request_resolves_form_urlencoded_body() {
-        let hbs = create_resolver();
+        let hbs = RwLock::new(create_resolver());
         let variables = HashMap::from([("token".to_string(), "secret123".to_string())]);
 
         let request = HttpRequestData {
@@ -276,7 +298,7 @@ mod tests {
 
     #[test]
     fn resolve_request_resolves_multipart_text_fields() {
-        let hbs = create_resolver();
+        let hbs = RwLock::new(create_resolver());
         let variables = HashMap::from([("greeting".to_string(), "hello world".to_string())]);
 
         let request = HttpRequestData {
@@ -335,7 +357,7 @@ mod tests {
 
     #[test]
     fn resolve_template_invalid_syntax_returns_app_error() {
-        let hbs = create_resolver();
+        let hbs = RwLock::new(create_resolver());
         let variables = HashMap::new();
         let err = resolve_template(&hbs, "{{", &variables).unwrap_err();
 
@@ -349,11 +371,24 @@ mod tests {
 
     #[test]
     fn preserve_undefined_helper_can_be_called_explicitly() {
-        let hbs = create_resolver();
+        let hbs = RwLock::new(create_resolver());
         let variables = HashMap::new();
 
         let resolved =
             resolve_template(&hbs, "{{preserve_undefined \"missing_key\"}}", &variables).unwrap();
         assert_eq!(resolved, "{{missing_key}}");
+    }
+
+    #[test]
+    fn resolve_template_registers_template_for_reuse() {
+        let hbs = RwLock::new(create_resolver());
+        let variables = HashMap::from([("base_url".to_string(), "https://api.test".to_string())]);
+        let template = "{{base_url}}/users";
+
+        let resolved = resolve_template(&hbs, template, &variables).unwrap();
+        assert_eq!(resolved, "https://api.test/users");
+
+        let read_guard = hbs.read().unwrap();
+        assert!(read_guard.has_template(template));
     }
 }

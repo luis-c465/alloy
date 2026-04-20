@@ -8,8 +8,7 @@ use crate::{
         types::{HttpRequestData, HttpResponseData, KeyValue, RequestBody, SendRequestResult},
     },
     scripting::{
-        run_post_response_script,
-        run_pre_request_script,
+        run_post_response_script, run_pre_request_script,
         types::{PostResponseScriptContext, PreRequestScriptContext, ScriptResult},
     },
     workspace::{folder_config, types::FolderConfig},
@@ -17,7 +16,11 @@ use crate::{
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use chrono::Utc;
 use handlebars::Handlebars;
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::Path,
+    sync::{Arc, RwLock},
+};
 use tauri::{AppHandle, Wry};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::{Mutex, OnceCell};
@@ -40,7 +43,7 @@ pub trait Api {
 pub struct ApiImpl {
     pub db: Arc<OnceCell<Arc<HistoryDb>>>,
     pub app_handle: Arc<OnceCell<AppHandle<Wry>>>,
-    pub hbs: Arc<Handlebars<'static>>,
+    pub hbs: Arc<RwLock<Handlebars<'static>>>,
     pub last_binary_response: Arc<Mutex<Option<Vec<u8>>>>,
 }
 
@@ -547,19 +550,15 @@ fn request_body_type_name(body: &RequestBody) -> String {
 
 fn apply_script_body_to_request(body: RequestBody, new_body: Option<String>) -> RequestBody {
     match body {
-        RequestBody::Json(current) => {
-            RequestBody::Json(new_body.unwrap_or(current))
-        }
+        RequestBody::Json(current) => RequestBody::Json(new_body.unwrap_or(current)),
         RequestBody::Raw {
             content,
             content_type,
             ..
-        } => {
-            RequestBody::Raw {
-                content: new_body.unwrap_or(content),
-                content_type,
-            }
-        }
+        } => RequestBody::Raw {
+            content: new_body.unwrap_or(content),
+            content_type,
+        },
         RequestBody::None => RequestBody::None,
         RequestBody::FormUrlEncoded(values) => RequestBody::FormUrlEncoded(values),
         RequestBody::Multipart(fields) => RequestBody::Multipart(fields),

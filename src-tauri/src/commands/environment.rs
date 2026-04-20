@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use handlebars::Handlebars;
 
@@ -36,7 +39,7 @@ pub trait EnvironmentApi {
 
 #[derive(Clone)]
 pub struct EnvironmentApiImpl {
-    pub hbs: Arc<Handlebars<'static>>,
+    pub hbs: Arc<RwLock<Handlebars<'static>>>,
 }
 
 impl EnvironmentApiImpl {

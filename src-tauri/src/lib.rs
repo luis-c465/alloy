@@ -17,7 +17,7 @@ use commands::{
 use environment::resolver;
 use history::db::{HistoryDb, HISTORY_RETENTION_DAYS};
 use specta_typescript::{BigIntExportBehavior, Typescript};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tauri::Manager;
 use taurpc::Router;
 use tokio::sync::{Mutex, OnceCell};
@@ -26,7 +26,7 @@ use tokio::sync::{Mutex, OnceCell};
 pub async fn run() {
     let db = Arc::new(OnceCell::<Arc<HistoryDb>>::new());
     let app_handle = Arc::new(OnceCell::<tauri::AppHandle<tauri::Wry>>::new());
-    let hbs = Arc::new(resolver::create_resolver());
+    let hbs = Arc::new(RwLock::new(resolver::create_resolver()));
     let last_binary_response = Arc::new(Mutex::new(None));
 
     let router = Router::new()
