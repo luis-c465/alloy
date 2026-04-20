@@ -21,7 +21,7 @@ export type HistoryEntry = { id: number; method: string; url: string; status: nu
 
 export type HistoryFilter = { query: string | null; method: string | null; status_min: number | null; status_max: number | null; limit: number }
 
-export type HistoryListEntry = { id: number; method: string; url: string; status: number | null; time_ms: number | null; timestamp: string }
+export type HistoryListEntry = { id: number; method: string; url: string; status: number | null; time_ms: number | null; size_bytes: number | null; timestamp: string }
 
 export type HttpFileData = { path: string; requests: HttpFileRequest[]; variables: KeyValue[] }
 
