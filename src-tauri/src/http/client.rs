@@ -374,7 +374,7 @@ pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedRespons
     let mut buf: Vec<u8> = Vec::with_capacity(
         content_length
             .map(|cl| cl.min(MAX_RESPONSE_BODY_BYTES as u64) as usize)
-            .unwrap_or(8192),
+            .unwrap_or(64 * 1024),
     );
     let mut is_truncated = false;
     let mut total_bytes: u64 = 0;
@@ -401,14 +401,22 @@ pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedRespons
     let body_base64 =
         (is_binary && buf.len() <= MAX_BINARY_BASE64_BYTES).then(|| BASE64_STANDARD.encode(&buf));
 
-    let body = if is_binary {
-        String::new()
+    let (body, binary_body) = if is_binary {
+        (String::new(), Some(buf))
     } else {
-        let mut text = String::from_utf8_lossy(&buf).into_owned();
+        let mut text = match String::from_utf8(buf) {
+            Ok(text) => text,
+            Err(error) => {
+                let bytes = error.into_bytes();
+                String::from_utf8_lossy(&bytes).into_owned()
+            }
+        };
+
         if is_truncated {
             text.push_str("\n\n[Response truncated — body exceeded 50 MB]");
         }
-        text
+
+        (text, None)
     };
 
     Ok(ExecutedResponse {
@@ -424,7 +432,7 @@ pub async fn execute_request(request: HttpRequestData) -> Result<ExecutedRespons
             time_ms: elapsed_ms,
             is_truncated,
         },
-        binary_body: is_binary.then(|| buf),
+        binary_body,
     })
 }
 
@@ -725,6 +733,38 @@ mod tests {
             response.binary_body.as_deref(),
             Some(&b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"[..])
         );
+    }
+
+    #[tokio::test]
+    async fn execute_request_invalid_utf8_text_uses_lossy_fallback() {
+        let address = spawn_binary_response_server("text/plain", b"ok\xFFdone").await;
+
+        let request = HttpRequestData {
+            method: "GET".to_string(),
+            url: format!("http://{address}/text"),
+            headers: Vec::new(),
+            query_params: Vec::new(),
+            body: RequestBody::None,
+            timeout_ms: None,
+            skip_ssl_verification: false,
+            request_variables: Vec::new(),
+            file_path: None,
+            auth_type: None,
+            auth_bearer: None,
+            auth_basic_username: None,
+            auth_basic_password: None,
+            pre_request_script: None,
+            post_response_script: None,
+        };
+
+        let response = execute_request(request)
+            .await
+            .expect("expected invalid utf-8 response to succeed");
+
+        assert!(!response.response.is_binary);
+        assert_eq!(response.response.body, "ok�done");
+        assert!(response.response.body_base64.is_none());
+        assert!(response.binary_body.is_none());
     }
 
     #[tokio::test]
