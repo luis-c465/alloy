@@ -21,6 +21,7 @@ pub struct HistoryListEntry {
     pub url: String,
     pub status: Option<u16>,
     pub time_ms: Option<u64>,
+    pub size_bytes: Option<u64>,
     pub timestamp: String,
 }
 

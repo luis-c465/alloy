@@ -117,7 +117,7 @@ impl HistoryDb {
     pub async fn list(&self, filter: &HistoryFilter) -> Result<Vec<HistoryListEntry>, AppError> {
         let mut sql = String::from(
             "
-            SELECT id, method, url, status, time_ms, timestamp
+            SELECT id, method, url, status, time_ms, size_bytes, timestamp
             FROM history
             WHERE 1 = 1
             ",
@@ -178,6 +178,7 @@ impl HistoryDb {
             .query_map(params_from_iter(bind_values), |row| {
                 let status = get_optional_u16(row, 3)?;
                 let time_ms = get_optional_u64(row, 4)?;
+                let size_bytes = get_optional_u64(row, 5)?;
 
                 Ok(HistoryListEntry {
                     id: row.get(0)?,
@@ -185,7 +186,8 @@ impl HistoryDb {
                     url: row.get(2)?,
                     status,
                     time_ms,
-                    timestamp: row.get(5)?,
+                    size_bytes,
+                    timestamp: row.get(6)?,
                 })
             })
             .map_err(|error| {
