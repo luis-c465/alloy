@@ -182,13 +182,20 @@ export default function App() {
         for (const tab of dirtyTabs) {
           const saved = await useRequestStore.getState().saveTab(tab.id);
           if (!saved) {
+            window.alert(`Unable to save "${tab.name}". The app will remain open so you can resolve the issue.`);
             return;
           }
         }
       }
 
       allowWindowCloseRef.current = true;
-      await getCurrentWindow().close();
+      try {
+        await getCurrentWindow().close();
+      } catch (error) {
+        allowWindowCloseRef.current = false;
+        console.error("Failed to close window from close-request handler", error);
+        window.alert("Unable to close the window due to missing permission or runtime error.");
+      }
     }).then((cleanup) => {
       unlisten = cleanup;
     });
