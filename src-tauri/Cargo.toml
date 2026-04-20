@@ -24,7 +24,7 @@ tauri-plugin-dialog = "2"
 taurpc = "0.7"
 specta = { version = "=2.0.0-rc.22", features = ["derive"] }
 specta-typescript = "0"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs"] }
 reqwest = { version = "0.12", features = ["json", "multipart", "cookies", "rustls-tls"] }
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
