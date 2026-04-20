@@ -1,23 +1,26 @@
 import { useMemo } from "react";
 import { KeyValueEditor } from "~/components/request/KeyValueEditor";
-import { useActiveTab } from "~/hooks/useActiveTab";
+import type { KeyValue } from "~/stores/request-store";
 import { useActiveTabField } from "~/hooks/useActiveTab";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 import { useRequestStore } from "~/stores/request-store";
 
+const EMPTY_HEADERS: KeyValue[] = [];
+
 export function HeadersEditor() {
-  const activeTab = useActiveTab();
-  const headers = useActiveTabField("headers", []);
+  const tabType = useActiveTabField("tabType", "request");
+  const filePath = useActiveTabField("filePath", null);
+  const headers = useActiveTabField("headers", EMPTY_HEADERS);
   const setHeaders = useRequestStore((state) => state.setHeaders);
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const getFolderConfigChain = useWorkspaceStore((state) => state.getFolderConfigChain);
 
   const inheritedItems = useMemo(() => {
-    if (!activeTab || activeTab.tabType !== "request") {
+    if (tabType !== "request" || !filePath) {
       return [];
     }
 
-    const chain = getFolderConfigChain(activeTab.filePath);
+    const chain = getFolderConfigChain(filePath);
     return chain
       .map(({ folderPath, config }) => {
         const source = workspacePath && folderPath.startsWith(`${workspacePath}/`)
@@ -32,7 +35,7 @@ export function HeadersEditor() {
         return { source, items };
       })
       .filter((group) => group.items.length > 0);
-  }, [activeTab, getFolderConfigChain, workspacePath]);
+  }, [filePath, getFolderConfigChain, tabType, workspacePath]);
 
   return (
     <KeyValueEditor

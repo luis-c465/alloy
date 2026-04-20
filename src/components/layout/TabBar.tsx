@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { IconFolder, IconPlus, IconX } from "@tabler/icons-react";
+import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -24,8 +25,38 @@ const methodColorClasses: Record<string, string> = {
   OPTIONS: "bg-zinc-500",
 };
 
+type TabBarTab = {
+  id: string;
+  name: string;
+  isDirty: boolean;
+  method: string;
+  tabType: "request" | "folder";
+};
+
 export function TabBar() {
-  const tabs = useRequestStore((state) => state.tabs);
+  const tabViewRef = useRef(new Map<string, TabBarTab>());
+  const tabs = useRequestStore(useShallow((state) => state.tabs.map((tab) => {
+    const cached = tabViewRef.current.get(tab.id);
+    if (
+      cached
+      && cached.name === tab.name
+      && cached.isDirty === tab.isDirty
+      && cached.method === tab.method
+      && cached.tabType === tab.tabType
+    ) {
+      return cached;
+    }
+
+    const nextTab: TabBarTab = {
+      id: tab.id,
+      name: tab.name,
+      isDirty: tab.isDirty,
+      method: tab.method,
+      tabType: tab.tabType,
+    };
+    tabViewRef.current.set(tab.id, nextTab);
+    return nextTab;
+  })));
   const activeTabId = useRequestStore((state) => state.activeTabId);
   const createTab = useRequestStore((state) => state.createTab);
   const duplicateTab = useRequestStore((state) => state.duplicateTab);
@@ -113,7 +144,7 @@ export function TabBar() {
                         </>
                       )}
 
-                      <span className="truncate text-left">{tab.name || tab.url || "New Request"}</span>
+                      <span className="truncate text-left">{tab.name || "New Request"}</span>
 
                       {tab.isDirty
                         ? <span className="size-1.5 shrink-0 rounded-full bg-primary" />
@@ -124,7 +155,7 @@ export function TabBar() {
                       type="button"
                       variant="ghost"
                       size="icon-xs"
-                      aria-label={`Close ${tab.name || tab.url || "tab"}`}
+                      aria-label={`Close ${tab.name || "tab"}`}
                       className="my-auto size-4 shrink-0 opacity-60 transition-opacity group-hover:opacity-100"
                       onClick={(event) => {
                         event.stopPropagation();

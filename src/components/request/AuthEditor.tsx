@@ -5,7 +5,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { VariableInput } from "~/components/ui/VariableInput";
 import { cn } from "~/lib/utils";
-import type { KeyValue } from "~/bindings";
+import { useActiveTabField } from "~/hooks/useActiveTab";
+import type { KeyValue as EnvironmentKeyValue } from "~/bindings";
 import { useWorkspaceStore } from "~/stores/workspace-store";
 import {
   encodeBase64Utf8,
@@ -15,6 +16,7 @@ import {
   useRequestStore,
   type AuthType,
   type FolderAuthType,
+  type KeyValue,
 } from "~/stores/request-store";
 
 type AuthEditorProps = {
@@ -38,17 +40,23 @@ const FOLDER_AUTH_TYPE_OPTIONS: Array<{ value: FolderAuthType; label: string }> 
 // inline `?? []` literal inside a Zustand selector creates a new array reference
 // on every call, which causes React's useSyncExternalStore to detect a spurious
 // change and trigger an infinite re-render loop.
-const EMPTY_ENV_VARIABLES: KeyValue[] = [];
+const EMPTY_ENV_VARIABLES: EnvironmentKeyValue[] = [];
+const EMPTY_HEADERS: KeyValue[] = [];
+const EMPTY_REQUEST_VARIABLES: KeyValue[] = [];
 
 export function AuthEditor({ authScope = "request" }: AuthEditorProps) {
-  const activeTab = useRequestStore((state) => {
-    const activeTabId = state.activeTabId ?? state.tabs[0]?.id;
-    if (!activeTabId) {
-      return null;
-    }
-
-    return state.tabs.find((tab) => tab.id === activeTabId) ?? null;
-  });
+  const tabType = useActiveTabField("tabType", "request");
+  const filePath = useActiveTabField("filePath", null);
+  const authTypeField = useActiveTabField("authType", "inherit");
+  const authBearerField = useActiveTabField("authBearer", "");
+  const authBasicUsernameField = useActiveTabField("authBasicUsername", "");
+  const authBasicPasswordField = useActiveTabField("authBasicPassword", "");
+  const folderAuthTypeField = useActiveTabField("folderAuthType", "none");
+  const folderAuthBearerField = useActiveTabField("folderAuthBearer", "");
+  const folderAuthBasicUsernameField = useActiveTabField("folderAuthBasicUsername", "");
+  const folderAuthBasicPasswordField = useActiveTabField("folderAuthBasicPassword", "");
+  const headers = useActiveTabField("headers", EMPTY_HEADERS);
+  const requestVariables = useActiveTabField("variables", EMPTY_REQUEST_VARIABLES);
   const setAuthType = useRequestStore((state) => state.setAuthType);
   const setAuthBearer = useRequestStore((state) => state.setAuthBearer);
   const setAuthBasicUsername = useRequestStore(
@@ -72,29 +80,28 @@ export function AuthEditor({ authScope = "request" }: AuthEditorProps) {
   const [showPassword, setShowPassword] = useState(false);
 
   const authType = authScope === "folder"
-    ? (activeTab?.folderAuthType ?? "none")
-    : (activeTab?.authType ?? "inherit");
+    ? folderAuthTypeField
+    : authTypeField;
   const authBearer = authScope === "folder"
-    ? (activeTab?.folderAuthBearer ?? "")
-    : (activeTab?.authBearer ?? "");
+    ? folderAuthBearerField
+    : authBearerField;
   const authBasicUsername = authScope === "folder"
-    ? (activeTab?.folderAuthBasicUsername ?? "")
-    : (activeTab?.authBasicUsername ?? "");
+    ? folderAuthBasicUsernameField
+    : authBasicUsernameField;
   const authBasicPassword = authScope === "folder"
-    ? (activeTab?.folderAuthBasicPassword ?? "")
-    : (activeTab?.authBasicPassword ?? "");
-  const hasManualAuthorizationHeader =
-    activeTab?.headers.some(
-      (header) =>
-        header.enabled && header.key.trim().toLowerCase() === "authorization",
-    ) ?? false;
+    ? folderAuthBasicPasswordField
+    : authBasicPasswordField;
+  const hasManualAuthorizationHeader = headers.some(
+    (header) =>
+      header.enabled && header.key.trim().toLowerCase() === "authorization",
+  );
 
   const inheritedFolderAuth = useMemo(() => {
-    if (authScope !== "request" || !activeTab || activeTab.tabType !== "request") {
+    if (authScope !== "request" || tabType !== "request" || !filePath) {
       return null;
     }
 
-    const chain = getFolderConfigChain(activeTab.filePath);
+    const chain = getFolderConfigChain(filePath);
     if (chain.length === 0) {
       return null;
     }
@@ -103,7 +110,7 @@ export function AuthEditor({ authScope = "request" }: AuthEditorProps) {
     // the first folder that actually configures auth (auth_type != "none").
     const source = [...chain].reverse().find((entry) => entry.config.auth_type !== "none");
     return source ?? null;
-  }, [activeTab, authScope, getFolderConfigChain]);
+  }, [authScope, filePath, getFolderConfigChain, tabType]);
 
   const effectiveAuthType: AuthType | FolderAuthType =
     authScope === "request" && authType === "inherit"
@@ -125,8 +132,8 @@ export function AuthEditor({ authScope = "request" }: AuthEditorProps) {
 
   const previewValue = useMemo(() => {
     const environmentVariables = getEnvironmentVariableMap(activeEnvironmentVariables);
-    const requestVariables = getEnvironmentVariableMap(activeTab?.variables ?? []);
-    const variables = new Map([...environmentVariables, ...requestVariables]);
+    const tabVariables = getEnvironmentVariableMap(requestVariables);
+    const variables = new Map([...environmentVariables, ...tabVariables]);
 
     return getAuthorizationHeaderValue(
       effectiveAuthType,
@@ -135,7 +142,7 @@ export function AuthEditor({ authScope = "request" }: AuthEditorProps) {
       resolveTemplateString(effectivePassword, variables),
     );
   }, [
-    activeTab?.variables,
+    requestVariables,
     activeEnvironmentVariables,
     effectiveAuthType,
     effectiveBearer,
