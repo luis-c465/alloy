@@ -121,6 +121,57 @@ export const pickImportFile = async (): Promise<string | null> => {
   return withApiError(api.import_export.pick_import_file(), "Failed to pick import file");
 };
 
+export interface OpenApiPreview {
+  title: string;
+  version: string;
+  openapi_version: string;
+  servers: string[];
+  operation_count: number;
+  tag_names: string[];
+  method_counts: [string, number][];
+}
+
+export interface OpenApiImportOptions {
+  folder_strategy: "tags" | "path" | "flat";
+  naming_strategy: "operationId" | "summary" | "methodPath";
+  include_deprecated: boolean;
+  server_index: number;
+}
+
+const openApiImportApi = api.import_export as unknown as {
+  pick_openapi_file: () => Promise<string | null>;
+  fetch_openapi_url: (url: string) => Promise<string>;
+  preview_openapi: (content: string) => Promise<OpenApiPreview>;
+  import_openapi: (
+    content: string,
+    workspacePath: string,
+    options: OpenApiImportOptions,
+  ) => Promise<ImportResult>;
+};
+
+export const pickOpenApiFile = async (): Promise<string | null> => {
+  return withApiError(openApiImportApi.pick_openapi_file(), "Failed to pick OpenAPI file");
+};
+
+export const fetchOpenApiUrl = async (url: string): Promise<string> => {
+  return withApiError(openApiImportApi.fetch_openapi_url(url), "Failed to fetch OpenAPI URL");
+};
+
+export const previewOpenApi = async (content: string): Promise<OpenApiPreview> => {
+  return withApiError(openApiImportApi.preview_openapi(content), "Failed to preview OpenAPI spec");
+};
+
+export const importOpenApi = async (
+  content: string,
+  workspacePath: string,
+  options: OpenApiImportOptions,
+): Promise<ImportResult> => {
+  return withApiError(
+    openApiImportApi.import_openapi(content, workspacePath, options),
+    "Failed to import OpenAPI spec",
+  );
+};
+
 export const pickWorkspaceFolder = async (): Promise<string | null> => {
   return withApiError(api.workspace.pick_workspace_folder(), "Failed to pick workspace");
 };

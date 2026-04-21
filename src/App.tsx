@@ -68,6 +68,8 @@ const CurlExportDialog = lazy(() => import("~/components/import-export/CurlExpor
   .then((module) => ({ default: module.CurlExportDialog })));
 const PostmanImportDialog = lazy(() => import("~/components/import-export/PostmanImportDialog")
   .then((module) => ({ default: module.PostmanImportDialog })));
+const OpenApiImportDialog = lazy(() => import("~/components/import-export/OpenApiImportDialog")
+  .then((module) => ({ default: module.OpenApiImportDialog })));
 
 export default function App() {
   const sidebarPanelRef = usePanelRef();
@@ -88,6 +90,7 @@ export default function App() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isPostmanImportDialogOpen, setIsPostmanImportDialogOpen] = useState(false);
+  const [isOpenApiImportDialogOpen, setIsOpenApiImportDialogOpen] = useState(false);
   const allowWindowCloseRef = useRef(false);
   const initTheme = useThemeStore((state) => state.initTheme);
   const initWorkspace = useWorkspaceStore((state) => state.initWorkspace);
@@ -298,6 +301,9 @@ export default function App() {
         onOpenPostmanImportDialog={() => {
           setIsPostmanImportDialogOpen(true);
         }}
+        onOpenOpenApiImportDialog={() => {
+          setIsOpenApiImportDialogOpen(true);
+        }}
       />
 
       <PanelGroup
@@ -474,6 +480,9 @@ export default function App() {
         onOpenPostmanImportDialog={() => {
           setIsPostmanImportDialogOpen(true);
         }}
+        onOpenOpenApiImportDialog={() => {
+          setIsOpenApiImportDialogOpen(true);
+        }}
       />
 
       <Suspense fallback={null}>
@@ -482,6 +491,10 @@ export default function App() {
         <PostmanImportDialog
           open={isPostmanImportDialogOpen}
           onOpenChange={setIsPostmanImportDialogOpen}
+        />
+        <OpenApiImportDialog
+          open={isOpenApiImportDialogOpen}
+          onOpenChange={setIsOpenApiImportDialogOpen}
         />
       </Suspense>
 

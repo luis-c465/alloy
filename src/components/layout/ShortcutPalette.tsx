@@ -33,6 +33,7 @@ type ShortcutPaletteProps = {
   onOpenImportDialog: () => void;
   onOpenExportDialog: () => void;
   onOpenPostmanImportDialog: () => void;
+  onOpenOpenApiImportDialog: () => void;
 };
 
 const HISTORY_LIMIT = 8;
@@ -263,6 +264,7 @@ export function ShortcutPalette({
   onOpenImportDialog,
   onOpenExportDialog,
   onOpenPostmanImportDialog,
+  onOpenOpenApiImportDialog,
 }: ShortcutPaletteProps) {
   const { hotkeys } = useHotkeyRegistrations();
   const hotkeyManager = getHotkeyManager();
@@ -614,6 +616,17 @@ export function ShortcutPalette({
           >
             <IconTerminal2 />
             <span className="font-medium">Import Postman Collection</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              runCommand(async () => {
+                onOpenOpenApiImportDialog();
+              });
+            }}
+            value="import openapi spec"
+          >
+            <IconTerminal2 />
+            <span className="font-medium">Import OpenAPI Spec</span>
           </CommandItem>
         </CommandGroup>
 

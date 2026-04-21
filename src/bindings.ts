@@ -48,6 +48,10 @@ export type MultipartField = { key: string; value: MultipartValue; content_type:
 
 export type MultipartValue = { Text: string } | { File: { path: string; filename: string | null } }
 
+export type OpenApiImportOptions = { folder_strategy: string; naming_strategy: string; include_deprecated: boolean; server_index: number }
+
+export type OpenApiPreview = { title: string; version: string; openapi_version: string; servers: string[]; operation_count: number; tag_names: string[]; method_counts: ([string, number])[] }
+
 export type PickedFile = { path: string; name: string; size_bytes: number | null }
 
 export type RequestBody = "None" | { Json: string } | { FormUrlEncoded: KeyValue[] } | { Multipart: MultipartField[] } | { Raw: { content: string; content_type: string } }
@@ -58,7 +62,7 @@ export type ScriptResult = { success: boolean; error: string | null; console_out
 
 export type SendRequestResult = { response: HttpResponseData; pre_script_result: ScriptResult | null; post_script_result: ScriptResult | null }
 
-const ARGS_MAP = { '':'{"save_response_to_file":["body_base64","suggested_filename"],"send_request":["request"],"send_request_with_env":["request","environment_name","workspace_path"]}', 'environment':'{"delete_environment":["workspace_path","name"],"list_environments":["workspace_path"],"read_environment":["workspace_path","name"],"resolve_url_preview":["url","workspace_path","env_name","request_variables"],"save_environment":["workspace_path","env"],"set_active_environment":["workspace_path","name"]}', 'history':'{"clear_history":[],"delete_history_entry":["id"],"get_history_entry":["id"],"list_history":["filter"]}', 'import_export':'{"export_curl":["request"],"import_curl":["curl_command"],"import_postman_collection":["json_content","workspace_path"],"pick_import_file":[]}', 'workspace':'{"create_directory":["parent_path","dir_name"],"create_http_file":["dir_path","file_name"],"delete_path":["target_path"],"ensure_workspace":["workspace_path"],"get_folder_config":["workspace_path","folder_path"],"list_files":["workspace_path"],"list_folder_configs":["workspace_path"],"pick_file":[],"pick_workspace_folder":[],"read_http_file":["file_path"],"rename_path":["from_path","to_path"],"set_folder_config":["workspace_path","folder_path","config"],"write_http_file":["file_path","data"]}' }
+const ARGS_MAP = { '':'{"save_response_to_file":["body_base64","suggested_filename"],"send_request":["request"],"send_request_with_env":["request","environment_name","workspace_path"]}', 'environment':'{"delete_environment":["workspace_path","name"],"list_environments":["workspace_path"],"read_environment":["workspace_path","name"],"resolve_url_preview":["url","workspace_path","env_name","request_variables"],"save_environment":["workspace_path","env"],"set_active_environment":["workspace_path","name"]}', 'history':'{"clear_history":[],"delete_history_entry":["id"],"get_history_entry":["id"],"list_history":["filter"]}', 'import_export':'{"export_curl":["request"],"fetch_openapi_url":["url"],"import_curl":["curl_command"],"import_openapi":["content","workspace_path","options"],"import_postman_collection":["json_content","workspace_path"],"pick_import_file":[],"pick_openapi_file":[],"preview_openapi":["content"]}', 'workspace':'{"create_directory":["parent_path","dir_name"],"create_http_file":["dir_path","file_name"],"delete_path":["target_path"],"ensure_workspace":["workspace_path"],"get_folder_config":["workspace_path","folder_path"],"list_files":["workspace_path"],"list_folder_configs":["workspace_path"],"pick_file":[],"pick_workspace_folder":[],"read_http_file":["file_path"],"rename_path":["from_path","to_path"],"set_folder_config":["workspace_path","folder_path","config"],"write_http_file":["file_path","data"]}' }
 export type Router = { "": {save_response_to_file: (bodyBase64: string | null, suggestedFilename: string | null) => Promise<boolean>, 
 send_request: (request: HttpRequestData) => Promise<SendRequestResult>, 
 send_request_with_env: (request: HttpRequestData, environmentName: string | null, workspacePath: string | null) => Promise<SendRequestResult>},
@@ -73,9 +77,13 @@ delete_history_entry: (id: number) => Promise<null>,
 get_history_entry: (id: number) => Promise<HistoryEntry | null>, 
 list_history: (filter: HistoryFilter) => Promise<HistoryListEntry[]>},
 "import_export": {export_curl: (request: HttpRequestData) => Promise<string>, 
+fetch_openapi_url: (url: string) => Promise<string>, 
 import_curl: (curlCommand: string) => Promise<HttpRequestData>, 
+import_openapi: (content: string, workspacePath: string, options: OpenApiImportOptions) => Promise<ImportResult>, 
 import_postman_collection: (jsonContent: string, workspacePath: string) => Promise<ImportResult>, 
-pick_import_file: () => Promise<string | null>},
+pick_import_file: () => Promise<string | null>, 
+pick_openapi_file: () => Promise<string | null>, 
+preview_openapi: (content: string) => Promise<OpenApiPreview>},
 "workspace": {create_directory: (parentPath: string, dirName: string) => Promise<string>, 
 create_http_file: (dirPath: string, fileName: string) => Promise<string>, 
 delete_path: (targetPath: string) => Promise<null>, 

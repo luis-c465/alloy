@@ -32,6 +32,7 @@ type ToolbarProps = {
   onOpenImportDialog: () => void;
   onOpenExportDialog: () => void;
   onOpenPostmanImportDialog: () => void;
+  onOpenOpenApiImportDialog: () => void;
 };
 
 export function Toolbar({
@@ -41,6 +42,7 @@ export function Toolbar({
   onOpenImportDialog,
   onOpenExportDialog,
   onOpenPostmanImportDialog,
+  onOpenOpenApiImportDialog,
 }: ToolbarProps) {
   const activeTab = useActiveTab();
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
@@ -141,6 +143,13 @@ export function Toolbar({
                 }}
               >
                 Import Postman Collection
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  onOpenOpenApiImportDialog();
+                }}
+              >
+                Import OpenAPI Spec
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
